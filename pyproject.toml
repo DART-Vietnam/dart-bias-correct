@@ -1,0 +1,17 @@
+[project]
+name = "dart-bias-correct"
+version = "0.1.0"
+description = "Bias correction module for the DART Pipeline"
+readme = "README.md"
+authors = [
+    { name = "Abhishek Dasgupta", email = "abhishek.dasgupta@dtc.ox.ac.uk" }
+]
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+dart-bias-correct = "dart_bias_correct:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
