@@ -7,7 +7,9 @@ authors = [
     { name = "Abhishek Dasgupta", email = "abhishek.dasgupta@dtc.ox.ac.uk" }
 ]
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "python-cmethods>=2.3.1",
+]
 
 [project.scripts]
 dart-bias-correct = "dart_bias_correct:main"
