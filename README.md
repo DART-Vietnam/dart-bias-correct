@@ -61,10 +61,8 @@ output/<ISO3>/era5/<ISO3>-<start_year>-<end_year>-era5.prep_bias_correct.{precip
 
 Corrected files will include the following metadata fields:
 
-- `DART_history`: Exact CLI command used to generate the file.
-- `checksum_reference`: SHA256 checksum of the reference dataset.
-- `checksum_uncorrected`: SHA256 checksum of the uncorrected dataset.
-- `checksum_file`: SHA256 checksum of the corrected output file.
+- `history`: Exact CLI command used to generate the file.
+- `provenance`: Checksums of input datasets
 
 ## Integration into DART-Pipeline
 

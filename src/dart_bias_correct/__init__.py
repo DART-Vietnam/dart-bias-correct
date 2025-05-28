@@ -2,6 +2,8 @@ import argparse
 import sys
 
 from .precipitation import bias_correct_precipitation
+from .forecast import bias_correct_forecast_from_paths
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -72,8 +74,11 @@ reference and uncorrected dataset
                 args.dataset_to_correct,
             )
         case "forecast":
-            # bias_correct_forecast(args.reference_dataset, args.uncorrected_dataset, args.dataset_to_correct)
-            print("Forecast mode not implemented yet!")
+            bias_correct_forecast_from_paths(
+                args.reference_dataset,
+                args.uncorrected_dataset,
+                args.dataset_to_correct,
+            )
         case _:
             print(f"Unsupported mode: {args.mode}", file=sys.stderr)
             sys.exit(1)
