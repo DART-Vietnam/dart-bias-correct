@@ -5,6 +5,7 @@ from pathlib import Path
 import xarray as xr
 import cmethods
 
+from .util import is_hourly
 
 def adjust_wrapper_tp(
     obs: xr.DataArray, simh: xr.DataArray, simp: xr.DataArray
@@ -70,12 +71,16 @@ def bias_correct_precipitation(
     """
     tp_ref = xr.open_dataset(reference_dataset)
     era_tp = xr.open_dataset(uncorrected_dataset).rename({"valid_time": "time"})
+
+    # Read in dataset to correct
     accum_vars = xr.open_dataset(dataset_to_correct).rename({"valid_time": "time"})
+    if is_hourly(accum_vars):
+        accum_vars = accum_vars.resample(time="D").sum()
     corrected_tp = adjust_wrapper_tp(tp_ref.tp, era_tp.tp, accum_vars.tp).rename(
         {"time": "valid_time"}
     )
     output_file = dataset_to_correct.parent / (
-        dataset_to_correct.stem + "_tp_corrected.nc"
+        dataset_to_correct.stem + ".tp_corrected.nc"
     )
     corrected_tp.to_netcdf(output_file)
     return output_file

@@ -1,5 +1,7 @@
 """Bias correction module (forecast)"""
 
+# import sys
+import logging
 import itertools
 from typing import Literal, NamedTuple
 from pathlib import Path
@@ -9,6 +11,11 @@ import xarray as xr
 import metpy.calc as mp
 from metpy.units import units
 from cmethods import adjust
+from tqdm import tqdm
+
+from .util import get_dart_root
+
+logger = logging.getLogger(__name__)
 
 
 class Percentile(NamedTuple):
@@ -64,7 +71,6 @@ def adjust_wrapper_quantiles(
     cmethods.adjust
         This is a thin wrapper around this bias correction method
     """
-
     return adjust(
         method="quantile_delta_mapping",
         obs=obs,
@@ -197,6 +203,13 @@ def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
 
     weekly_raw_forecast = xr.merge([weekly_mean, weekly_max, weekly_min])
 
+    # Drop step 0 of weekly_raw_forecast
+    # TODO: Check if this is OK
+    # NOTE: This is done to match the accumulated variables which have steps at 7 and 14 days
+    weekly_raw_forecast = weekly_raw_forecast.sel(
+        step=weekly_raw_forecast.step != np.timedelta64(0)
+    )
+
     # For the weekly accumulation the forecast works differently, as the
     # forecast shows the full sum of the variables since the beginning of the
     # forecast. hence, for the first weekly stats we can just select the 7th
@@ -212,24 +225,21 @@ def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
         - data_raw_forecast_accum.sel(step="7.days")[["tp", "ssrd"]]
     ).assign_coords(step=data_raw_forecast_accum.sel(step="14.days").step)
 
-    variables = ["tp", "ssrd"]
+    weekly_sum = xr.concat([weekly_sum1, weekly_sum2], dim="step")
 
+    logger.info("Assigning accumulative variables in weekly aggregation")
     # Assign the variables to the dataset
-    weekly_raw_forecast = weekly_raw_forecast.assign(
-        {
-            var: xr.DataArray(
-                data=xr.concat([weekly_sum1, weekly_sum2], dim="step")[var].values,
-                dims=["step", "lat", "lon", "number"],
-                coords={
-                    "step": weekly_mean.step,
-                    "lat": weekly_mean.lat,
-                    "lon": weekly_mean.lon,
-                    "number": weekly_mean.number,
-                },
-            )
-            for var in variables
-        }
-    )
+    for var in ["tp", "ssrd"]:
+        weekly_raw_forecast[var] = xr.DataArray(
+            data=weekly_sum[var].values,
+            dims=["step", "lat", "lon", "number"],
+            coords={
+                "step": weekly_raw_forecast.step,
+                "lat": weekly_raw_forecast.lat,
+                "lon": weekly_raw_forecast.lon,
+                "number": weekly_raw_forecast.number,
+            },
+        )
 
     # When doing the resampling, step vector gets changed to 1 and 8 days,
     # which represent when the code starts measuring the weekly mean (this is,
@@ -262,6 +272,7 @@ def bias_correct_forecast(
         np.array(data_hist_forecast.time)
     )  # Dtes in which the historical forecast data of the ECMWF begin
 
+    logger.info("Calculating weekly statistics for historical data")
     week1_mean = weekly_stats_era5(
         era5_hist, initial_time=dates, timestep=7, type="mean"
     ).drop_vars("tp")  # measuring daily mean temperature and relative humidity
@@ -269,16 +280,15 @@ def bias_correct_forecast(
         era5_hist.tp, initial_time=dates, timestep=7, type="sum"
     )  # weekly sum
     week1 = xr.merge([week1_mean, week1_sum])
-
     week2_mean = weekly_stats_era5(
         era5_hist,
-        initial_time=dates + data_raw_forecast.step[0],
+        initial_time=dates + data_raw_forecast.step[1].item(),
         timestep=7,
         type="mean",
     ).drop_vars("tp")  # measuring daily mean temperature and relative humidity
     week2_sum = weekly_stats_era5(
         era5_hist.tp,
-        initial_time=dates + data_raw_forecast.step[0],
+        initial_time=dates + data_raw_forecast.step[1].item(),
         timestep=7,
         type="sum",
     )  # weekly sum
@@ -293,6 +303,7 @@ def bias_correct_forecast(
     # correction technique to work we need to have the same times.
     era_week2["time"] = era_week1["time"]
 
+    logger.info("Computing weekly aggregated forecast with derived metrics")
     weekly_raw_forecast = get_weekly_forecast(data_raw_forecast)
     corrected_forecast = weekly_raw_forecast.copy(deep=True)
     corrected_forecast = corrected_forecast[["t2m", "rh", "tp"]]
@@ -313,6 +324,7 @@ def bias_correct_forecast(
     )
 
     for step in [7, 14]:  # 2 weeks in advance
+        logger.info("Correction at step=%d", step)
         # Use ensemble mean for correction
         forecast = data_hist_forecast.sel(step=f"{step}.days").mean(dim="number")
         grid = itertools.product(
@@ -320,6 +332,7 @@ def bias_correct_forecast(
             range(len(forecast.lon)),
             range(len(data_raw_forecast.number)),
         )
+        n_grid = len(forecast.lat) * len(forecast.lon) * len(data_raw_forecast.number)
 
         # Selecting reanalysis data with the same starting weeks as the forecast
         reanalysis = {7: era_week1, 14: era_week2}[step]
@@ -336,7 +349,8 @@ def bias_correct_forecast(
                 )
 
         for m, percentile in enumerate(PERCENTILES):
-            for la, lo, s in grid:
+            logger.info("Correction at %r", percentile)
+            for la, lo, s in tqdm(grid, total=n_grid):
                 data_to_corr_or = weekly_raw_forecast.sel(number=s)
                 for var in masks:
                     kind = "*" if var == "tp" else "+"
@@ -377,13 +391,14 @@ def bias_correct_forecast(
                             ADJUST_N_QUANTILES[percentile.is_extreme],
                             inter_reanalysis,
                             inter_forecast,
-                            data_to_corr.rename({"time": "time_to_corr"}),
+                            # data_to_corr.rename({"time": "time_to_corr"}),
+                            data_to_corr,
                             kind=kind,
                         )
                     else:
                         continue
 
-                    corr_data = corr_data.rename({"time_to_corr": "time"})
+                    # corr_data = corr_data.rename({"time_to_corr": "time"})
 
                     # Now, in the following lines we are checking in the dummy
                     # copy of the dataset if, in the same coordinates the
@@ -454,12 +469,67 @@ def bias_correct_forecast(
     #       DART-Pipeline should resample to target grid as appropriate
 
 
+def get_forecast_dataset(ecmwf_forecast_iso3_date: str) -> xr.Dataset:
+    dart_root = get_dart_root()
+    parts = ecmwf_forecast_iso3_date.split("-")
+    iso3 = parts[0]
+    date = "-".join(parts[1:])
+    ecmwf_root = dart_root / "sources" / iso3 / "ecmwf"
+    accum_file = ecmwf_root / f"{iso3}-{date}-ecmwf.forecast.accum.nc"
+    instant_file = ecmwf_root / f"{iso3}-{date}-ecmwf.forecast.instant.nc"
+    if not accum_file.exists():
+        raise FileNotFoundError(f"Accumulative variables file not found: {accum_file}")
+    if not instant_file.exists():
+        raise FileNotFoundError(
+            f"Accumulative variables file not found: {instant_file}"
+        )
+    instant = xr.open_dataset(instant_file)
+    accum = xr.open_dataset(accum_file)
+    return xr.merge([instant, accum])
+
+
+def get_corrected_forecast_path(ecmwf_forecast_iso3_date: str) -> Path:
+    dart_root = get_dart_root()
+    parts = ecmwf_forecast_iso3_date.split("-")
+    iso3 = parts[0]
+    date = "-".join(parts[1:])
+    ecmwf_root = dart_root / "sources" / iso3 / "ecmwf"
+    return (
+        ecmwf_root
+        / "sources"
+        / iso3
+        / "ecmwf"
+        / f"{iso3}-{date}-ecmwf.forecast.corrected.nc"
+    )
+
+
+def print_dataset(ds: xr.Dataset | xr.DataArray, name: str):
+    print("-" * (79 - len(name)) + " " + name)
+    print(ds)
+
+
 def bias_correct_forecast_from_paths(
     era5_hist_path: Path,
     data_hist_forecast_path: Path,
-    data_raw_forecast_path: Path,
+    ecmwf_forecast_iso3_date: str,
 ) -> xr.Dataset:
+    logger.info("Starting bias correct forecast")
+    logger.info("Reading historical observational data: %s", era5_hist_path)
+    logger.info("Reading historical forecast data: %s", data_hist_forecast_path)
     era5_hist = xr.open_dataset(era5_hist_path)
+    if "r" in era5_hist.variables:
+        era5_hist = era5_hist.rename_vars({"r": "rh"})
     data_hist_forecast = xr.open_dataset(data_hist_forecast_path)
-    data_raw_forecast = xr.open_dataset(data_raw_forecast_path)
-    return bias_correct_forecast(era5_hist, data_hist_forecast, data_raw_forecast)
+
+    # TODO: Make this generic
+    data_hist_forecast = data_hist_forecast.sel(lat=slice(24, 8), lon=slice(102, 110))
+    era5_hist = era5_hist.sel(latitude=slice(24, 8), longitude=slice(102, 110))
+
+    # TODO: Assert shape equal
+    logger.info("Reading ECMWF forecast data for: %s", ecmwf_forecast_iso3_date)
+    data_raw_forecast = get_forecast_dataset(ecmwf_forecast_iso3_date)
+    output_path = get_corrected_forecast_path(ecmwf_forecast_iso3_date)
+    logger.info("Expected output path on successful correction: %s", output_path)
+    ds = bias_correct_forecast(era5_hist, data_hist_forecast, data_raw_forecast)
+    ds.to_netcdf(output_path)
+    logger.info("Correction complete, file saved at: %s", output_path)

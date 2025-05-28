@@ -1,9 +1,12 @@
 import argparse
 import sys
+import logging
 
 from .precipitation import bias_correct_precipitation
 from .forecast import bias_correct_forecast_from_paths
 
+LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
+logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
 
 def main():
     parser = argparse.ArgumentParser(
