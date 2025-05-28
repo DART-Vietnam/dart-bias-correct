@@ -512,7 +512,7 @@ def bias_correct_forecast_from_paths(
     era5_hist_path: Path,
     data_hist_forecast_path: Path,
     ecmwf_forecast_iso3_date: str,
-) -> xr.Dataset:
+) -> Path:
     logger.info("Starting bias correct forecast")
     logger.info("Reading historical observational data: %s", era5_hist_path)
     logger.info("Reading historical forecast data: %s", data_hist_forecast_path)
@@ -533,3 +533,4 @@ def bias_correct_forecast_from_paths(
     ds = bias_correct_forecast(era5_hist, data_hist_forecast, data_raw_forecast)
     ds.to_netcdf(output_path)
     logger.info("Correction complete, file saved at: %s", output_path)
+    return output_path
