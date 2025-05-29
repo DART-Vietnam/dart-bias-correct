@@ -88,7 +88,7 @@ def weekly_stats_era5(
     dataset1: xr.Dataset,
     initial_time: np.ndarray,
     timestep: int,
-    type: Literal["mean", "sum"],
+    agg: Literal["mean", "sum"],
 ):
     """
     Function to measure the mean/sum statistics of a dataset following specific
@@ -105,7 +105,7 @@ def weekly_stats_era5(
         For example, if initial_time is a vector with 2 values (1st and 4th of Jan
         of 2010 and timestep=7, the function will measure the temporal statistics from 1st-7th
         and 4-11th of January.
-    type: Literal['mean', 'sum']
+    agg: Literal['mean', 'sum']
         Type of statistic desired being "sum" for total accumulation or "mean" for mean statistics
 
     Returns
@@ -118,7 +118,7 @@ def weekly_stats_era5(
     dataset_time = dataset1.where(
         (dataset1.time >= initial_time[0]) & (dataset1.time < final_time[0]), drop=True
     )
-    dataset_time = getattr(dataset_time, type)(
+    dataset_time = getattr(dataset_time, agg)(
         dim="time"
     )  # call mean or sum on dataset
     dataset_time_end = dataset_time.expand_dims(time=[initial_time[0]])
@@ -128,7 +128,7 @@ def weekly_stats_era5(
             (dataset1.time >= initial_time[i]) & (dataset1.time < final_time[i]),
             drop=True,
         )
-        inter = getattr(dataset_time, type)(dim="time")
+        inter = getattr(dataset_time, agg)(dim="time")
         inter = inter.expand_dims(time=[initial_time[i]])
         dataset_time_end = xr.concat([dataset_time_end, inter], dim="time")
     return dataset_time_end
@@ -277,23 +277,23 @@ def bias_correct_forecast(
 
     logger.info("Calculating weekly statistics for historical data")
     week1_mean = weekly_stats_era5(
-        era5_hist, initial_time=dates, timestep=7, type="mean"
+        era5_hist, initial_time=dates, timestep=7, agg="mean"
     ).drop_vars("tp")  # measuring daily mean temperature and relative humidity
     week1_sum = weekly_stats_era5(
-        era5_hist.tp, initial_time=dates, timestep=7, type="sum"
+        era5_hist.tp, initial_time=dates, timestep=7, agg="sum"
     )  # weekly sum
     week1 = xr.merge([week1_mean, week1_sum])
     week2_mean = weekly_stats_era5(
         era5_hist,
         initial_time=dates + data_raw_forecast.step[1].item(),
         timestep=7,
-        type="mean",
+        agg="mean",
     ).drop_vars("tp")  # measuring daily mean temperature and relative humidity
     week2_sum = weekly_stats_era5(
         era5_hist.tp,
         initial_time=dates + data_raw_forecast.step[1].item(),
         timestep=7,
-        type="sum",
+        agg="sum",
     )  # weekly sum
     week2 = xr.merge([week2_mean, week2_sum])
 
