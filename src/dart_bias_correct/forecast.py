@@ -16,6 +16,10 @@ from .util import get_dart_root
 
 logger = logging.getLogger(__name__)
 
+# TODO: This is temporary, should be fixed to use geoglue.region
+LATITUDE_SLICE = slice(11.25, 10)
+LONGITUDE_SLICE = slice(106, 107.25)
+
 
 class Percentile(NamedTuple):
     low: int
@@ -499,6 +503,13 @@ def print_dataset(ds: xr.Dataset | xr.DataArray, name: str):
     print(ds)
 
 
+def crop(ds: xr.Dataset) -> xr.Dataset:
+    if "lat" in ds.coords:
+        return ds.sel(lat=LATITUDE_SLICE, lon=LONGITUDE_SLICE)
+    else:
+        return ds.sel(latitude=LATITUDE_SLICE, longitude=LONGITUDE_SLICE)
+
+
 def bias_correct_forecast_from_paths(
     era5_hist_path: Path,
     data_hist_forecast_path: Path,
@@ -512,13 +523,15 @@ def bias_correct_forecast_from_paths(
         era5_hist = era5_hist.rename_vars({"r": "rh"})
     data_hist_forecast = xr.open_dataset(data_hist_forecast_path)
 
-    # TODO: Make this generic
-    data_hist_forecast = data_hist_forecast.sel(lat=slice(24, 8), lon=slice(102, 110))
-    era5_hist = era5_hist.sel(latitude=slice(24, 8), longitude=slice(102, 110))
+    data_hist_forecast = crop(data_hist_forecast)
+    era5_hist = crop(era5_hist)
 
     # TODO: Assert shape equal
     logger.info("Reading ECMWF forecast data for: %s", ecmwf_forecast_iso3_date)
     data_raw_forecast = get_forecast_dataset(ecmwf_forecast_iso3_date)
+
+    data_raw_forecast = crop(data_raw_forecast)
+
     output_path = get_corrected_forecast_path(ecmwf_forecast_iso3_date)
     logger.info("Expected output path on successful correction: %s", output_path)
     ds = bias_correct_forecast(era5_hist, data_hist_forecast, data_raw_forecast)
