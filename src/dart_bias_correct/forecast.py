@@ -331,7 +331,6 @@ def bias_correct_forecast(
             range(len(forecast.lon)),
             range(len(data_raw_forecast.number)),
         )
-        n_grid = len(forecast.lat) * len(forecast.lon) * len(data_raw_forecast.number)
 
         # Selecting reanalysis data with the same starting weeks as the forecast
         reanalysis = {7: era_week1, 14: era_week2}[step]
@@ -492,13 +491,7 @@ def get_corrected_forecast_path(ecmwf_forecast_iso3_date: str) -> Path:
     iso3 = parts[0]
     date = "-".join(parts[1:])
     ecmwf_root = dart_root / "sources" / iso3 / "ecmwf"
-    return (
-        ecmwf_root
-        / "sources"
-        / iso3
-        / "ecmwf"
-        / f"{iso3}-{date}-ecmwf.forecast.corrected.nc"
-    )
+    return ecmwf_root / f"{iso3}-{date}-ecmwf.forecast.corrected.nc"
 
 
 def print_dataset(ds: xr.Dataset | xr.DataArray, name: str):
