@@ -453,16 +453,14 @@ def bias_correct_forecast(
     # Now we add the new corrected values to the main processed xarray
     weekly_raw_forecast = weekly_raw_forecast.assign(
         {
-            "bc_t2m": corrected_forecast.t2m,
-            "bc_r": corrected_forecast.rh,
-            "bc_tp": corrected_forecast.tp,
+            "t2m_bc": corrected_forecast.t2m,
+            "rh_bc": corrected_forecast.rh,
+            "tp_bc": corrected_forecast.tp,
         }
     )
 
-    weekly_raw_forecast["rh"], weekly_raw_forecast["corr_rh"] = (
-        weekly_raw_forecast["rh"] * units("percent"),
-        weekly_raw_forecast["corr_rh"] * units("percent"),
-    )
+    for var in ["rh", "rh_bc"]:
+        weekly_raw_forecast[var] = weekly_raw_forecast[var] * units("percent")
     return weekly_raw_forecast
 
     # NOTE: resampling is not performed in dart-bias-correct, processing pipelines in
