@@ -11,7 +11,6 @@ import xarray as xr
 import metpy.calc as mp
 from metpy.units import units
 from cmethods import adjust
-from tqdm import tqdm
 
 from .util import get_dart_root
 
@@ -349,8 +348,8 @@ def bias_correct_forecast(
                 )
 
         for m, percentile in enumerate(PERCENTILES):
-            logger.info("Correction at %r", percentile)
-            for la, lo, s in tqdm(grid, total=n_grid):
+            logger.info("Starting correction at %r", percentile)
+            for la, lo, s in grid:
                 data_to_corr_or = weekly_raw_forecast.sel(number=s)
                 for var in masks:
                     kind = "*" if var == "tp" else "+"
@@ -441,6 +440,7 @@ def bias_correct_forecast(
                             lon=corr_data.lon,
                         )
                     ] += 1
+            logger.info("Finished correction at %r", percentile)
 
     # The bias correction method deletes units for relative humidity so we need to rewrite it
     corrected_forecast["rh"] = corrected_forecast["rh"] / 100

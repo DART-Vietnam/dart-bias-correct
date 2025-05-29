@@ -10,7 +10,6 @@ requires-python = ">=3.10"
 dependencies = [
     "metpy>=1.7.0",
     "python-cmethods>=2.3.1",
-    "tqdm>=4.67.1",
 ]
 
 [project.scripts]
