@@ -330,11 +330,6 @@ def bias_correct_forecast(
         logger.info("Correction at step=%d", step)
         # Use ensemble mean for correction
         forecast = data_hist_forecast.sel(step=f"{step}.days").mean(dim="number")
-        grid = itertools.product(
-            range(len(forecast.lat)),
-            range(len(forecast.lon)),
-            range(len(data_raw_forecast.number)),
-        )
 
         # Selecting reanalysis data with the same starting weeks as the forecast
         reanalysis = {7: era_week1, 14: era_week2}[step]
@@ -352,6 +347,11 @@ def bias_correct_forecast(
 
         for m, percentile in enumerate(PERCENTILES):
             logger.info("Starting correction at %r", percentile)
+            grid = itertools.product(
+                range(len(forecast.lat)),
+                range(len(forecast.lon)),
+                range(len(data_raw_forecast.number)),
+            )
             for la, lo, s in grid:
                 data_to_corr_or = weekly_raw_forecast.sel(number=s)
                 for var in masks:
@@ -377,7 +377,6 @@ def bias_correct_forecast(
                     data_to_corr = data_to_corr_or[var].sel(
                         lat=data_to_corr_or.lat[la], lon=data_to_corr_or.lon[lo]
                     )
-
                     # Now, we will search if in the forecast data exists values
                     # of the variable  to correct that are contained inside the
                     # percentile threshold considered in the historical
@@ -389,18 +388,20 @@ def bias_correct_forecast(
                     )
 
                     if data_to_corr.size != 0:
+                        if var == "rh":
+                            logger.info(
+                                "Correcting data for 'rh' at %r",
+                                (la, lo, s, percentile),
+                            )
                         corr_data = adjust_wrapper_quantiles(
                             ADJUST_N_QUANTILES[percentile.is_extreme],
                             inter_reanalysis,
                             inter_forecast,
-                            # data_to_corr.rename({"time": "time_to_corr"}),
                             data_to_corr,
                             kind=kind,
                         )
                     else:
                         continue
-
-                    # corr_data = corr_data.rename({"time_to_corr": "time"})
 
                     # Now, in the following lines we are checking in the dummy
                     # copy of the dataset if, in the same coordinates the
@@ -424,6 +425,9 @@ def bias_correct_forecast(
                         # value from the corrected dataset
                         corr_data = corr_data.sel(time=filtered_data.time)
 
+                    if var == "rh":
+                        print(data_to_corr)
+                        print(corr_data[var])
                     # Now, we will include the corrected values into the xarray dataset
                     corrected_forecast[var].loc[
                         dict(
@@ -484,8 +488,8 @@ def get_forecast_dataset(ecmwf_forecast_iso3_date: str) -> xr.Dataset:
         raise FileNotFoundError(
             f"Accumulative variables file not found: {instant_file}"
         )
-    instant = xr.open_dataset(instant_file)
-    accum = xr.open_dataset(accum_file)
+    instant = xr.open_dataset(instant_file, decode_timedelta=True)
+    accum = xr.open_dataset(accum_file, decode_timedelta=True)
     return xr.merge([instant, accum])
 
 
@@ -521,7 +525,7 @@ def bias_correct_forecast_from_paths(
     era5_hist = xr.open_dataset(era5_hist_path)
     if "r" in era5_hist.variables:
         era5_hist = era5_hist.rename_vars({"r": "rh"})
-    data_hist_forecast = xr.open_dataset(data_hist_forecast_path)
+    data_hist_forecast = xr.open_dataset(data_hist_forecast_path, decode_timedelta=True)
 
     data_hist_forecast = crop(data_hist_forecast)
     era5_hist = crop(era5_hist)
