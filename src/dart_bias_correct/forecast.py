@@ -1,6 +1,5 @@
 """Bias correction module (forecast)"""
 
-# import sys
 import logging
 import itertools
 from typing import Literal, NamedTuple
@@ -118,9 +117,7 @@ def weekly_stats_era5(
     dataset_time = dataset1.where(
         (dataset1.time >= initial_time[0]) & (dataset1.time < final_time[0]), drop=True
     )
-    dataset_time = getattr(dataset_time, agg)(
-        dim="time"
-    )  # call mean or sum on dataset
+    dataset_time = getattr(dataset_time, agg)(dim="time")  # call mean or sum on dataset
     dataset_time_end = dataset_time.expand_dims(time=[initial_time[0]])
 
     for i in range(1, len(initial_time)):
@@ -137,10 +134,14 @@ def weekly_stats_era5(
 def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
     "Returns weekly aggregated forecast with derived metrics"
 
-    rh = mp.relative_humidity_from_dewpoint(
-        np.array(data_raw_forecast.t2m) * units.kelvin,
-        np.array(data_raw_forecast.d2m) * units.kelvin,
-    )
+    # RH is between 0 to 1, so we multiply by 100 and use .values to remove units
+    rh = (
+        mp.relative_humidity_from_dewpoint(
+            np.array(data_raw_forecast.t2m) * units.kelvin,
+            np.array(data_raw_forecast.d2m) * units.kelvin,
+        )
+        * 100
+    ).magnitude
     sh = mp.specific_humidity_from_dewpoint(
         np.array(data_raw_forecast.sp) * units.pascal,
         np.array(data_raw_forecast.d2m) * units.kelvin,
@@ -377,6 +378,7 @@ def bias_correct_forecast(
                     data_to_corr = data_to_corr_or[var].sel(
                         lat=data_to_corr_or.lat[la], lon=data_to_corr_or.lon[lo]
                     )
+
                     # Now, we will search if in the forecast data exists values
                     # of the variable  to correct that are contained inside the
                     # percentile threshold considered in the historical
@@ -388,11 +390,6 @@ def bias_correct_forecast(
                     )
 
                     if data_to_corr.size != 0:
-                        if var == "rh":
-                            logger.info(
-                                "Correcting data for 'rh' at %r",
-                                (la, lo, s, percentile),
-                            )
                         corr_data = adjust_wrapper_quantiles(
                             ADJUST_N_QUANTILES[percentile.is_extreme],
                             inter_reanalysis,
@@ -425,9 +422,6 @@ def bias_correct_forecast(
                         # value from the corrected dataset
                         corr_data = corr_data.sel(time=filtered_data.time)
 
-                    if var == "rh":
-                        print(data_to_corr)
-                        print(corr_data[var])
                     # Now, we will include the corrected values into the xarray dataset
                     corrected_forecast[var].loc[
                         dict(
