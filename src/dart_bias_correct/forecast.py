@@ -21,6 +21,27 @@ logger = logging.getLogger(__name__)
 LATITUDE_SLICE = slice(11.25, 10)
 LONGITUDE_SLICE = slice(106, 107.25)
 
+# r = relative_humidity, q = specific_humidity
+INSTANT_VARS = ["t2m", "d2m", "sp", "u10", "v10", "r", "q"]
+INSTANT_EXTREME_VARS = ["mx2t24", "mxr24", "mxq24", "mn2t24", "mnr24", "mnq24"]
+ACCUM_VARS = ["tp", "ssrd"]
+SUPPORTED_VARS = INSTANT_VARS + INSTANT_EXTREME_VARS + ACCUM_VARS
+
+BIAS_CORRECT_VARS = ["t2m", "r", "tp"]
+
+
+def instant_vars(ds: xr.Dataset, include_extremes: bool = False) -> xr.Dataset:
+    _vars = INSTANT_VARS + INSTANT_EXTREME_VARS if include_extremes else INSTANT_VARS
+    return ds[[v for v in ds.data_vars if v in _vars]]
+
+
+def accum_vars(ds: xr.Dataset) -> xr.Dataset:
+    return ds[[v for v in ds.data_vars if v in ACCUM_VARS]]
+
+
+def supported_vars(ds: xr.Dataset) -> xr.Dataset:
+    return ds[[v for v in ds.data_vars if v in SUPPORTED_VARS]]
+
 
 class Percentile(NamedTuple):
     low: int
@@ -137,24 +158,20 @@ def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
     "Returns weekly aggregated forecast with derived metrics"
 
     # RH is between 0 to 1, so we multiply by 100 and use .values to remove units
-    rh = (
+    r = (
         mp.relative_humidity_from_dewpoint(
             np.array(data_raw_forecast.t2m) * units.kelvin,
             np.array(data_raw_forecast.d2m) * units.kelvin,
         )
         * 100
     ).magnitude
-    sh = mp.specific_humidity_from_dewpoint(
+    q = mp.specific_humidity_from_dewpoint(
         np.array(data_raw_forecast.sp) * units.pascal,
         np.array(data_raw_forecast.d2m) * units.kelvin,
     ).to("kg/kg")
-    ws = mp.wind_speed(
-        np.array(data_raw_forecast.u10) * units.meters / units.second,
-        np.array(data_raw_forecast.v10) * units.meters / units.second,
-    ).to("m/s")
 
     # Now we will include these variables into the main dataset
-    data_vars = {"rh": rh, "sh": sh, "ws": ws}
+    data_vars = {"r": r, "q": q}
 
     # Create the xarray Dataset
     inter = xr.Dataset(
@@ -180,30 +197,30 @@ def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
         {"latitude": "lat", "longitude": "lon"}
     )
     data_raw_forecast_accum = (
-        data_raw_forecast[["tp", "ssrd"]].resample(step="1D").sum(dim="step")
-    )  # getting accumulated variables
+        accum_vars(data_raw_forecast).resample(step="1D").sum(dim="step")
+    )
     data_raw_forecast_inst = (
-        data_raw_forecast.drop_vars(["tp", "ssrd"]).resample(step="1D").mean(dim="step")
-    )  # getting instanteous variables
+        instant_vars(data_raw_forecast).resample(step="1D").mean(dim="step")
+    )
 
     # Weekly aggregation
     # TODO: Note that this is different from aggregation in the primary pipeline (DART-Pipeline)
     #       where maximum is taken over the day and overall mean is calculated
     weekly_mean = data_raw_forecast_inst.resample(step="7D").mean(dim="step")[
-        ["t2m", "rh", "sh", "ws"]
+        ["t2m", "r", "q"]
     ]
     weekly_max = (
         data_raw_forecast_inst.resample(step="7D")
         .max(dim="step")
-        .rename_vars({"t2m": "mx2t24", "rh": "mxrh24", "sh": "mxsh24"})[
-            ["mx2t24", "mxrh24", "mxsh24"]
+        .rename_vars({"t2m": "mx2t24", "r": "mxr24", "q": "mxq24"})[
+            ["mx2t24", "mxr24", "mxq24"]
         ]
     )
     weekly_min = (
         data_raw_forecast_inst.resample(step="7D")
         .min(dim="step")
-        .rename_vars({"t2m": "mn2t24", "rh": "mnrh24", "sh": "mnsh24"})[
-            ["mn2t24", "mnrh24", "mnsh24"]
+        .rename_vars({"t2m": "mn2t24", "r": "mnr24", "q": "mnq24"})[
+            ["mn2t24", "mnr24", "mnq24"]
         ]
     )
 
@@ -220,22 +237,22 @@ def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
     # forecast shows the full sum of the variables since the beginning of the
     # forecast. hence, for the first weekly stats we can just select the 7th
     # day of forecast.
-    weekly_sum1 = data_raw_forecast_accum.sel(step="7.days")[["tp", "ssrd"]]
+    weekly_sum1 = data_raw_forecast_accum.sel(step="7.days")[ACCUM_VARS]
 
     # In order to get the accumulated sum for the second week, we need to
     # subtract results from day 14 minus the 7th day, (and then assign again
     # the step coordinates as after the subtraction the coordinates disappear
 
     weekly_sum2 = (
-        data_raw_forecast_accum.sel(step="14.days")[["tp", "ssrd"]]
-        - data_raw_forecast_accum.sel(step="7.days")[["tp", "ssrd"]]
+        data_raw_forecast_accum.sel(step="14.days")[ACCUM_VARS]
+        - data_raw_forecast_accum.sel(step="7.days")[ACCUM_VARS]
     ).assign_coords(step=data_raw_forecast_accum.sel(step="14.days").step)
 
     weekly_sum = xr.concat([weekly_sum1, weekly_sum2], dim="step")
 
     logger.info("Assigning accumulative variables in weekly aggregation")
     # Assign the variables to the dataset
-    for var in ["tp", "ssrd"]:
+    for var in ACCUM_VARS:
         weekly_raw_forecast[var] = xr.DataArray(
             data=weekly_sum[var].values,
             dims=["step", "lat", "lon", "number"],
@@ -408,18 +425,18 @@ def bias_correct_forecast_parallel(
 
     logger.info("Calculating weekly statistics for historical data")
     week1_mean = weekly_stats_era5(
-        era5_hist, initial_time=dates, timestep=7, agg="mean"
-    ).drop_vars("tp")  # measuring daily mean temperature and relative humidity
+        instant_vars(era5_hist), initial_time=dates, timestep=7, agg="mean"
+    )
     week1_sum = weekly_stats_era5(
         era5_hist.tp, initial_time=dates, timestep=7, agg="sum"
-    )  # weekly sum
+    )
     week1 = xr.merge([week1_mean, week1_sum])
     week2_mean = weekly_stats_era5(
-        era5_hist,
+        instant_vars(era5_hist),
         initial_time=dates + data_raw_forecast.step[1].item(),
         timestep=7,
         agg="mean",
-    ).drop_vars("tp")  # measuring daily mean temperature and relative humidity
+    )
     week2_sum = weekly_stats_era5(
         era5_hist.tp,
         initial_time=dates + data_raw_forecast.step[1].item(),
@@ -440,7 +457,7 @@ def bias_correct_forecast_parallel(
     logger.info("Computing weekly aggregated forecast with derived metrics")
     weekly_raw_forecast = get_weekly_forecast(data_raw_forecast)
     corrected_forecast = weekly_raw_forecast.copy(deep=True)
-    corrected_forecast = corrected_forecast[["t2m", "rh", "tp"]]
+    corrected_forecast = corrected_forecast[BIAS_CORRECT_VARS]
 
     # bool_dataset keeps track of lat,lon grid points that have already been
     # corrected Correction takes place according to percentile values with
@@ -464,7 +481,7 @@ def bias_correct_forecast_parallel(
 
         # Selecting reanalysis data with the same starting weeks as the forecast
         reanalysis = {7: era_week1, 14: era_week2}[step]
-        masks = {var: [] for var in ["t2m", "rh", "tp"]}
+        masks = {var: [] for var in BIAS_CORRECT_VARS}
 
         # Create masks to handle extreme values differently
         for p in PERCENTILES:
@@ -507,23 +524,18 @@ def bias_correct_forecast_parallel(
             logger.info("Finished correction at %r", percentile)
 
     # The bias correction method deletes units for relative humidity so we need to rewrite it
-    corrected_forecast["rh"] = corrected_forecast["rh"] / 100
-    corrected_forecast["rh"].attrs["units"] = "percent"
-    corrected_forecast["rh"] = corrected_forecast["rh"].metpy.quantify()
-    corrected_forecast["rh"] = corrected_forecast["rh"].metpy.convert_units(
-        units.percent
-    )
+    corrected_forecast["r"].attrs["units"] = "percent"
 
     # Now we add the new corrected values to the main processed xarray
     weekly_raw_forecast = weekly_raw_forecast.assign(
         {
             "t2m_bc": corrected_forecast.t2m,
-            "rh_bc": corrected_forecast.rh,
+            "r_bc": corrected_forecast.r,
             "tp_bc": corrected_forecast.tp,
         }
     )
 
-    for var in ["rh", "rh_bc"]:
+    for var in ["r", "r_bc"]:
         weekly_raw_forecast[var] = weekly_raw_forecast[var] * units("percent")
     return weekly_raw_forecast
 
@@ -574,7 +586,7 @@ def bias_correct_forecast(
     logger.info("Computing weekly aggregated forecast with derived metrics")
     weekly_raw_forecast = get_weekly_forecast(data_raw_forecast)
     corrected_forecast = weekly_raw_forecast.copy(deep=True)
-    corrected_forecast = corrected_forecast[["t2m", "rh", "tp"]]
+    corrected_forecast = corrected_forecast[BIAS_CORRECT_VARS]
 
     # bool_dataset keeps track of lat,lon grid points that have already been
     # corrected Correction takes place according to percentile values with
@@ -598,7 +610,7 @@ def bias_correct_forecast(
 
         # Selecting reanalysis data with the same starting weeks as the forecast
         reanalysis = {7: era_week1, 14: era_week2}[step]
-        masks = {var: [] for var in ["t2m", "rh", "tp"]}
+        masks = {var: [] for var in BIAS_CORRECT_VARS}
 
         # Create masks to handle extreme values differently
         for p in PERCENTILES:
@@ -708,23 +720,18 @@ def bias_correct_forecast(
             logger.info("Finished correction at %r", percentile)
 
     # The bias correction method deletes units for relative humidity so we need to rewrite it
-    corrected_forecast["rh"] = corrected_forecast["rh"] / 100
-    corrected_forecast["rh"].attrs["units"] = "percent"
-    corrected_forecast["rh"] = corrected_forecast["rh"].metpy.quantify()
-    corrected_forecast["rh"] = corrected_forecast["rh"].metpy.convert_units(
-        units.percent
-    )
+    corrected_forecast["r"].attrs["units"] = "percent"
 
     # Now we add the new corrected values to the main processed xarray
     weekly_raw_forecast = weekly_raw_forecast.assign(
         {
             "t2m_bc": corrected_forecast.t2m,
-            "rh_bc": corrected_forecast.rh,
+            "r_bc": corrected_forecast.r,
             "tp_bc": corrected_forecast.tp,
         }
     )
 
-    for var in ["rh", "rh_bc"]:
+    for var in ["r", "r_bc"]:
         weekly_raw_forecast[var] = weekly_raw_forecast[var] * units("percent")
     return weekly_raw_forecast
 
@@ -748,7 +755,8 @@ def get_forecast_dataset(ecmwf_forecast_iso3_date: str) -> xr.Dataset:
         )
     instant = xr.open_dataset(instant_file, decode_timedelta=True)
     accum = xr.open_dataset(accum_file, decode_timedelta=True)
-    return xr.merge([instant, accum])
+    ds = xr.merge([instant, accum])
+    return supported_vars(ds)
 
 
 def get_corrected_forecast_path(ecmwf_forecast_iso3_date: str, parallel: bool) -> Path:
@@ -786,12 +794,13 @@ def bias_correct_forecast_from_paths(
     logger.info("Reading historical observational data: %s", era5_hist_path)
     logger.info("Reading historical forecast data: %s", data_hist_forecast_path)
     era5_hist = xr.open_dataset(era5_hist_path)
-    if "r" in era5_hist.variables:
-        era5_hist = era5_hist.rename_vars({"r": "rh"})
     data_hist_forecast = xr.open_dataset(data_hist_forecast_path, decode_timedelta=True)
-
-    data_hist_forecast = crop(data_hist_forecast)
-    era5_hist = crop(era5_hist)
+    if "rh" in era5_hist.variables:
+        era5_hist = era5_hist.rename_vars({"rh": "r"})
+    if "rh" in data_hist_forecast.variables:
+        data_hist_forecast = data_hist_forecast.rename_vars({"rh": "r"})
+    era5_hist = crop(supported_vars(era5_hist))
+    data_hist_forecast = crop(supported_vars(data_hist_forecast))
 
     # TODO: Assert shape equal
     logger.info("Reading ECMWF forecast data for: %s", ecmwf_forecast_iso3_date)
