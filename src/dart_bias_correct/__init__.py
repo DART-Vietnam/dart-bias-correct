@@ -8,6 +8,7 @@ from .forecast import bias_correct_forecast_from_paths
 LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
 logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="""
@@ -66,6 +67,11 @@ reference and uncorrected dataset
         "dataset_to_correct",
         help="Either a NetCDF file to correct or a special syntax era5:ISO3-year to correct a specific year of ERA5 data.",
     )
+    parser.add_argument(
+        "--parallel",
+        help="Run bias correction in parallel (only for mode=forecast)",
+        action="store_true",
+    )
 
     args = parser.parse_args()
 
@@ -81,6 +87,7 @@ reference and uncorrected dataset
                 args.reference_dataset,
                 args.uncorrected_dataset,
                 args.dataset_to_correct,
+                args.parallel,
             )
         case _:
             print(f"Unsupported mode: {args.mode}", file=sys.stderr)

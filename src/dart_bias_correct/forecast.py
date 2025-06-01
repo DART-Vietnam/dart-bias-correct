@@ -296,7 +296,7 @@ def correct_grid_point(
         coords=bool_dataset.coords,
     )
     # write only bool_dataset
-    # to avoid multiple cores modifying the same dataset, we create a write only 
+    # to avoid multiple cores modifying the same dataset, we create a write only
     # version of of bool_dataset
     wbool_dataset = xr.Dataset(
         {
@@ -751,13 +751,14 @@ def get_forecast_dataset(ecmwf_forecast_iso3_date: str) -> xr.Dataset:
     return xr.merge([instant, accum])
 
 
-def get_corrected_forecast_path(ecmwf_forecast_iso3_date: str) -> Path:
+def get_corrected_forecast_path(ecmwf_forecast_iso3_date: str, parallel: bool) -> Path:
     dart_root = get_dart_root()
     parts = ecmwf_forecast_iso3_date.split("-")
     iso3 = parts[0]
     date = "-".join(parts[1:])
     ecmwf_root = dart_root / "sources" / iso3 / "ecmwf"
-    return ecmwf_root / f"{iso3}-{date}-ecmwf.forecast.corrected.nc"
+    _parallel = "_parallel" if parallel else ""
+    return ecmwf_root / f"{iso3}-{date}-ecmwf.forecast.corrected{_parallel}.nc"
 
 
 def print_dataset(ds: xr.Dataset | xr.DataArray, name: str):
@@ -776,8 +777,12 @@ def bias_correct_forecast_from_paths(
     era5_hist_path: Path,
     data_hist_forecast_path: Path,
     ecmwf_forecast_iso3_date: str,
+    parallel: bool = False,
 ) -> Path:
-    logger.info("Starting bias correct forecast")
+    if parallel:
+        logger.info("Starting bias correct forecast [parallel]")
+    else:
+        logger.info("Starting bias correct forecast")
     logger.info("Reading historical observational data: %s", era5_hist_path)
     logger.info("Reading historical forecast data: %s", data_hist_forecast_path)
     era5_hist = xr.open_dataset(era5_hist_path)
@@ -794,9 +799,14 @@ def bias_correct_forecast_from_paths(
 
     data_raw_forecast = crop(data_raw_forecast)
 
-    output_path = get_corrected_forecast_path(ecmwf_forecast_iso3_date)
+    output_path = get_corrected_forecast_path(ecmwf_forecast_iso3_date, parallel)
     logger.info("Expected output path on successful correction: %s", output_path)
-    ds = bias_correct_forecast_parallel(era5_hist, data_hist_forecast, data_raw_forecast)
+    if parallel:
+        ds = bias_correct_forecast_parallel(
+            era5_hist, data_hist_forecast, data_raw_forecast
+        )
+    else:
+        ds = bias_correct_forecast(era5_hist, data_hist_forecast, data_raw_forecast)
     ds.to_netcdf(output_path)
     logger.info("Correction complete, file saved at: %s", output_path)
     return output_path
