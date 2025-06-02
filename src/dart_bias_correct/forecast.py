@@ -24,7 +24,7 @@ LONGITUDE_SLICE = slice(106, 107.25)
 # r = relative_humidity, q = specific_humidity
 INSTANT_VARS = ["t2m", "d2m", "sp", "u10", "v10", "r", "q"]
 INSTANT_EXTREME_VARS = ["mx2t24", "mxr24", "mxq24", "mn2t24", "mnr24", "mnq24"]
-ACCUM_VARS = ["tp", "ssrd"]
+ACCUM_VARS = ["tp"]
 SUPPORTED_VARS = INSTANT_VARS + INSTANT_EXTREME_VARS + ACCUM_VARS
 
 BIAS_CORRECT_VARS = ["t2m", "r", "tp"]
