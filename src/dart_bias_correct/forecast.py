@@ -67,19 +67,23 @@ ADJUST_N_QUANTILES: dict[bool, int] = {True: 10, False: 200}
 
 
 def adjust_wrapper_quantiles(
+    method: Literal["quantile_mapping", "quantile_delta_mapping"],
     n_quantiles: int,
     obs: xr.Dataset | xr.DataArray,
     simh: xr.Dataset | xr.DataArray,
     simp: xr.Dataset | xr.DataArray,
-    kind: Literal["+", "*"],
+    kind: Literal["+", "*"] = "+",
 ) -> xr.Dataset | xr.DataArray:
     """Function to correct extreme values located in the tails of the distribution
 
     Parameters
     ----------
+    method
+        Method to use for bias correction, one of *quantile_mapping* or
+        *quantile_delta_mapping*
     n_quantiles
         Number of quantiles, passed as the `n_quantiles` parameter
-        to cmethods.adjust
+        to cmethods.adjust"
     obs
         Historical ERA5 data that will be used as reference for
         quantile mapping correction
@@ -89,21 +93,32 @@ def adjust_wrapper_quantiles(
         Real-time forecast data that we want to correct
     kind
         Type of quantile delta mapping "+" is additive
-        (for temperature and humidity) whereas "*" is for precipitation
+        (for temperature and humidity) whereas "*" is for precipitation.
+        Default value is "+". This parameter is not used when method='quantile_mapping'
 
     See Also
     --------
     cmethods.adjust
         This is a thin wrapper around this bias correction method
     """
-    return adjust(
-        method="quantile_delta_mapping",
-        obs=obs,
-        simh=simh,
-        simp=simp,
-        n_quantiles=n_quantiles,  # Default number of quantiles for extreme correction
-        kind=kind,  # "+"" for non tp and "*"" for tp
-    )
+    match method:
+        case "quantile_delta_mapping":
+            return adjust(
+                method="quantile_delta_mapping",
+                obs=obs,
+                simh=simh,
+                simp=simp,
+                n_quantiles=n_quantiles,  # Default number of quantiles for extreme correction
+                kind=kind,  # "+"" for non tp and "*"" for tp
+            )
+        case "quantile_mapping":
+            return adjust(
+                method="quantile_mapping",
+                obs=obs,
+                simh=simh,
+                simp=simp,
+                n_quantiles=n_quantiles,  # Default number of quantiles for extreme correction
+            )
 
 
 def weekly_stats_era5(
@@ -288,6 +303,7 @@ def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
 
 def correct_grid_point(
     grid_point: tuple[float, float, int],
+    method: Literal["quantile_mapping", "quantile_delta_mapping"],
     reanalysis: xr.Dataset,
     forecast: xr.Dataset,
     weekly_raw_forecast: xr.Dataset,
@@ -361,6 +377,7 @@ def correct_grid_point(
 
         if data_to_corr.size != 0:
             corr_data = adjust_wrapper_quantiles(
+                method,
                 ADJUST_N_QUANTILES[percentile_is_extreme],
                 inter_reanalysis,
                 inter_forecast,
@@ -418,6 +435,7 @@ def bias_correct_forecast_parallel(
     era5_hist: xr.Dataset,
     data_hist_forecast: xr.Dataset,
     data_raw_forecast: xr.Dataset,
+    method: Literal["quantile_mapping", "quantile_delta_mapping"],
 ):
     dates = np.array(
         np.array(data_hist_forecast.time)
@@ -506,6 +524,7 @@ def bias_correct_forecast_parallel(
                     pool.map(
                         functools.partial(
                             correct_grid_point,
+                            method=method,
                             reanalysis=reanalysis,
                             forecast=forecast,
                             weekly_raw_forecast=weekly_raw_forecast,
@@ -547,6 +566,7 @@ def bias_correct_forecast(
     era5_hist: xr.Dataset,
     data_hist_forecast: xr.Dataset,
     data_raw_forecast: xr.Dataset,
+    method: Literal["quantile_mapping", "quantile_delta_mapping"],
 ):
     dates = np.array(
         np.array(data_hist_forecast.time)
@@ -667,6 +687,7 @@ def bias_correct_forecast(
 
                     if data_to_corr.size != 0:
                         corr_data = adjust_wrapper_quantiles(
+                            method,
                             ADJUST_N_QUANTILES[percentile.is_extreme],
                             inter_reanalysis,
                             inter_forecast,
@@ -785,12 +806,13 @@ def bias_correct_forecast_from_paths(
     era5_hist_path: Path,
     data_hist_forecast_path: Path,
     ecmwf_forecast_iso3_date: str,
+    method: Literal["quantile_mapping", "quantile_delta_mapping"],
     parallel: bool = False,
 ) -> Path:
     if parallel:
-        logger.info("Starting bias correct forecast [parallel]")
+        logger.info("Starting bias correct forecast [parallel] using %s", method)
     else:
-        logger.info("Starting bias correct forecast")
+        logger.info("Starting bias correct forecast using %s", method)
     logger.info("Reading historical observational data: %s", era5_hist_path)
     logger.info("Reading historical forecast data: %s", data_hist_forecast_path)
     era5_hist = xr.open_dataset(era5_hist_path)
@@ -812,10 +834,12 @@ def bias_correct_forecast_from_paths(
     logger.info("Expected output path on successful correction: %s", output_path)
     if parallel:
         ds = bias_correct_forecast_parallel(
-            era5_hist, data_hist_forecast, data_raw_forecast
+            era5_hist, data_hist_forecast, data_raw_forecast, method
         )
     else:
-        ds = bias_correct_forecast(era5_hist, data_hist_forecast, data_raw_forecast)
+        ds = bias_correct_forecast(
+            era5_hist, data_hist_forecast, data_raw_forecast, method
+        )
     ds.to_netcdf(output_path)
     logger.info("Correction complete, file saved at: %s", output_path)
     return output_path
