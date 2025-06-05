@@ -72,6 +72,13 @@ reference and uncorrected dataset
         help="Run bias correction in parallel (only for mode=forecast)",
         action="store_true",
     )
+    parser.add_argument(
+        "-m",
+        "--method",
+        help="Method to use for bias correction (forecast)",
+        choices=["quantile_mapping", "quantile_delta_mapping"],
+        default="quantile_mapping",
+    )
 
     args = parser.parse_args()
 
@@ -87,6 +94,7 @@ reference and uncorrected dataset
                 args.reference_dataset,
                 args.uncorrected_dataset,
                 args.dataset_to_correct,
+                args.method,
                 args.parallel,
             )
         case _:
