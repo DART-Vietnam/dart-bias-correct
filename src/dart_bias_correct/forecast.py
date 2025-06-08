@@ -437,7 +437,7 @@ def bias_correct_forecast_parallel(
     weekly_raw_forecast = get_weekly_forecast(data_raw_forecast)
     corrected_forecast = weekly_raw_forecast.copy(deep=True)
     corrected_forecast = corrected_forecast[BIAS_CORRECT_VARS]
-    corrected_coords = set()
+    corrected_coords: set[GridPoint] = set()
 
     def apply_patch(patch: list[GridPointValue]):
         for var, s, lat_idx, lon_idx, time, value in patch:
