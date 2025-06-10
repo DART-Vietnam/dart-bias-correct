@@ -606,7 +606,8 @@ def bias_correct_forecast(
                 range(len(data_raw_forecast.number)),
             )
             for la, lo, s in grid:
-                data_to_corr_or = weekly_raw_forecast.sel(number=s)
+                data_to_corr_or = weekly_raw_forecast.sel(number=s).where(weekly_raw_forecast.time == weekly_raw_forecast.time[int(step/7)-1], drop=True)# Selecting simulation and forecast timestep to correct
+    
                 for var in masks:
                     kind = "*" if var == "tp" else "+"
 
