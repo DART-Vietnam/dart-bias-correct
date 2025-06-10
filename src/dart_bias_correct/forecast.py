@@ -240,20 +240,18 @@ def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
 
     # Weekly aggregation
     # TODO: Note that this is different from aggregation in the primary pipeline (DART-Pipeline)
-    #       where maximum is taken over the day and overall mean is calculated
+    #       where maximum is taken over the day and overall mean is calculated ##Iago: It should follow the same methodology as in the primary 
     weekly_mean = data_raw_forecast_inst.resample(step="7D").mean(dim="step")[
         ["t2m", "r", "q"]
     ]
     weekly_max = (
-        data_raw_forecast_inst.resample(step="7D")
-        .max(dim="step")
+        data_raw_forecast_inst.resample(step="1D").max(dim="step").resample(step="7D").mean(dim="step")
         .rename_vars({"t2m": "mx2t24", "r": "mxr24", "q": "mxq24"})[
             ["mx2t24", "mxr24", "mxq24"]
         ]
     )
     weekly_min = (
-        data_raw_forecast_inst.resample(step="7D")
-        .min(dim="step")
+        data_raw_forecast_inst.resample(step="1D").min(dim="step").resample(step="7D").mean(dim="step")
         .rename_vars({"t2m": "mn2t24", "r": "mnr24", "q": "mnq24"})[
             ["mn2t24", "mnr24", "mnq24"]
         ]
