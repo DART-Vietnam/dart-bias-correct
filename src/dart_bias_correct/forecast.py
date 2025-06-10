@@ -335,16 +335,18 @@ def correct_grid_point(
     masks: dict[str, list[xr.DataArray]],
     percentile_idx: int,
     percentile_is_extreme: bool,
+    step: int,
 ) -> list[GridPointValue]:
     la, lo, s, var = grid_point
-    data_to_corr_or = weekly_raw_forecast.sel(number=s)
-
+    t = weekly_raw_forecast.time.to_numpy()[int(step / 7) - 1]
     # skip grid point if corrected already
-    t0, t1 = np.array(data_to_corr_or.time.values)
-    p0: GridPoint = var, s, la, lo, t0  # type: ignore
-    p1: GridPoint = var, s, la, lo, t1  # type: ignore
-    if p0 in corrected_coords and p1 in corrected_coords:
+    if (var, s, la, lo, t) in corrected_coords:
         return []
+
+    data_to_corr_or = weekly_raw_forecast.sel(number=s).where(
+        weekly_raw_forecast.time == weekly_raw_forecast.time[int(step / 7) - 1],
+        drop=True,
+    )
 
     kind = "*" if var == "tp" else "+"
 
@@ -496,6 +498,7 @@ def bias_correct_forecast_parallel(
                             masks=masks,
                             percentile_idx=m,
                             percentile_is_extreme=PERCENTILES[m].is_extreme,
+                            step=step,
                         ),
                         grid,
                     ),
