@@ -232,7 +232,7 @@ def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
         {"latitude": "lat", "longitude": "lon"}
     )
     data_raw_forecast_accum = (
-        accum_vars(data_raw_forecast).resample(step="1D").sum(dim="step")
+        accum_vars(data_raw_forecast)#.resample(step="1D").sum(dim="step") # In the case of accumulated variables, the forecast give us the total accumulation of the variable per timestep. THis means that if we select precipitation in step 7-14 days, it would select the accumulation of precipitation since beginning of forecast until day 7 or 14
     )
     data_raw_forecast_inst = (
         instant_vars(data_raw_forecast).resample(step="1D").mean(dim="step")
