@@ -232,7 +232,9 @@ def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
         {"latitude": "lat", "longitude": "lon"}
     )
     data_raw_forecast_accum = (
-        accum_vars(data_raw_forecast)#.resample(step="1D").sum(dim="step") # In the case of accumulated variables, the forecast give us the total accumulation of the variable per timestep. THis means that if we select precipitation in step 7-14 days, it would select the accumulation of precipitation since beginning of forecast until day 7 or 14
+        accum_vars(
+            data_raw_forecast
+        )  # .resample(step="1D").sum(dim="step") # In the case of accumulated variables, the forecast give us the total accumulation of the variable per timestep. THis means that if we select precipitation in step 7-14 days, it would select the accumulation of precipitation since beginning of forecast until day 7 or 14
     )
     data_raw_forecast_inst = (
         instant_vars(data_raw_forecast).resample(step="1D").mean(dim="step")
@@ -243,13 +245,19 @@ def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
         ["t2m", "r", "q"]
     ]
     weekly_max = (
-        data_raw_forecast_inst.resample(step="1D").max(dim="step").resample(step="7D").mean(dim="step")
+        data_raw_forecast_inst.resample(step="1D")
+        .max(dim="step")
+        .resample(step="7D")
+        .mean(dim="step")
         .rename_vars({"t2m": "mx2t24", "r": "mxr24", "q": "mxq24"})[
             ["mx2t24", "mxr24", "mxq24"]
         ]
     )
     weekly_min = (
-        data_raw_forecast_inst.resample(step="1D").min(dim="step").resample(step="7D").mean(dim="step")
+        data_raw_forecast_inst.resample(step="1D")
+        .min(dim="step")
+        .resample(step="7D")
+        .mean(dim="step")
         .rename_vars({"t2m": "mn2t24", "r": "mnr24", "q": "mnq24"})[
             ["mn2t24", "mnr24", "mnq24"]
         ]
@@ -606,8 +614,12 @@ def bias_correct_forecast(
                 range(len(data_raw_forecast.number)),
             )
             for la, lo, s in grid:
-                data_to_corr_or = weekly_raw_forecast.sel(number=s).where(weekly_raw_forecast.time == weekly_raw_forecast.time[int(step/7)-1], drop=True)# Selecting simulation and forecast timestep to correct
-    
+                data_to_corr_or = weekly_raw_forecast.sel(number=s).where(
+                    weekly_raw_forecast.time
+                    == weekly_raw_forecast.time[int(step / 7) - 1],
+                    drop=True,
+                )  # Selecting simulation and forecast timestep to correct
+
                 for var in masks:
                     kind = "*" if var == "tp" else "+"
 

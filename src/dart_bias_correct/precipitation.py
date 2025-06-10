@@ -7,6 +7,7 @@ import cmethods
 
 from .util import is_hourly
 
+
 def adjust_wrapper_tp(
     obs: xr.DataArray, simh: xr.DataArray, simp: xr.DataArray
 ) -> xr.DataArray:
