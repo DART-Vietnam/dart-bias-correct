@@ -84,6 +84,7 @@ PERCENTILES: list[Percentile] = [
 # n_quantiles value to use in adjust_wrapper_quantiles for is_extreme=True or
 # is_extreme=False
 ADJUST_N_QUANTILES: dict[bool, int] = {True: 10, False: 200}
+ADJUST_KIND: dict[str, Literal["+", "*"]] = {"t2m": "+", "r": "+", "tp": "*"}
 
 
 def adjust_wrapper_quantiles(
@@ -529,6 +530,10 @@ def bias_correct_forecast_parallel(
     #       DART-Pipeline should resample to target grid as appropriate
 
 
+def sim_coords(ds: xr.DataArray | xr.Dataset, number: int) -> dict:
+    return {"time": ds["time"], "number": number, "lat": ds["lat"], "lon": ds["lon"]}
+
+
 def bias_correct_forecast(
     era5_hist: xr.Dataset,
     data_hist_forecast: xr.Dataset,
@@ -583,7 +588,7 @@ def bias_correct_forecast(
         {
             var: (
                 corrected_forecast[var].dims,
-                np.full(corrected_forecast[var].shape, 0, dtype=int),
+                np.full(corrected_forecast[var].shape, False, dtype=bool),
             )
             for var in corrected_forecast.data_vars
         },
@@ -594,6 +599,10 @@ def bias_correct_forecast(
         logger.info("Correction at step=%d", step)
         # Use ensemble mean for correction
         forecast = data_hist_forecast.sel(step=f"{step}.days").mean(dim="number")
+        weekly_raw_forecast_to_corr = weekly_raw_forecast.where(
+            weekly_raw_forecast.time == weekly_raw_forecast.time[int(step / 7) - 1],
+            drop=True,
+        )
 
         # Selecting reanalysis data with the same starting weeks as the forecast
         reanalysis = {7: era_week1, 14: era_week2}[step]
@@ -611,105 +620,76 @@ def bias_correct_forecast(
 
         for m, percentile in enumerate(PERCENTILES):
             logger.info("Starting correction at %r", percentile)
-            grid = itertools.product(
-                range(len(forecast.lat)),
-                range(len(forecast.lon)),
-                range(len(data_raw_forecast.number)),
-            )
-            for la, lo, s in grid:
-                data_to_corr_or = weekly_raw_forecast.sel(number=s).where(
-                    weekly_raw_forecast.time
-                    == weekly_raw_forecast.time[int(step / 7) - 1],
-                    drop=True,
-                )  # Selecting simulation and forecast timestep to correct
-
+            for s in range(len(data_raw_forecast.number)):
+                data_to_corr_or = weekly_raw_forecast_to_corr.sel(number=s)
                 for var in masks:
-                    kind = "*" if var == "tp" else "+"
+                    inter_forecast = forecast[var].where(masks[var][m])
+                    inter_reanalysis = reanalysis[var].where(masks[var][m])
 
-                    # Identify the lat and lon point where we have reanalysis
-                    # data between a specific threshold and locate forecast
-                    # data in the same timestamp in the forecast
-                    inter_forecast = (
-                        forecast[var]
-                        .where(masks[var][m])
-                        .sel(lat=forecast.lat[la], lon=forecast.lon[lo])
-                        .dropna(dim="time")
-                    )
-                    inter_reanalysis = (
-                        reanalysis[var]
-                        .where(masks[var][m])
-                        .sel(lat=reanalysis.lat[la], lon=reanalysis.lon[lo])
-                        .dropna(dim="time")
-                    )
-
-                    # Get the same latitudinal and longitudinal point for the data to correct
-                    data_to_corr = data_to_corr_or[var].sel(
-                        lat=data_to_corr_or.lat[la], lon=data_to_corr_or.lon[lo]
-                    )
-
-                    # Now, we will search if in the forecast data exists values
-                    # of the variable  to correct that are contained inside the
-                    # percentile threshold considered in the historical
-                    # forecast data (inter_forecast)
+                    data_to_corr = data_to_corr_or[var]
+                    # Filtering data from future forecast outside the percentile range considered
                     data_to_corr = data_to_corr.where(
-                        (data_to_corr >= inter_forecast.min())
-                        & (data_to_corr < inter_forecast.max()),
+                        (data_to_corr >= inter_forecast.min(dim="time"))
+                        & (data_to_corr < inter_forecast.max(dim="time")),
                         drop=True,
                     )
 
-                    if data_to_corr.size != 0:
-                        corr_data = adjust_wrapper_quantiles(
-                            method,
-                            ADJUST_N_QUANTILES[percentile.is_extreme],
-                            inter_reanalysis,
-                            inter_forecast,
-                            data_to_corr,
-                            kind=kind,
-                        )
-                    else:
+                    valid_data = data_to_corr
+                    if valid_data.size == 0:  # nothing to correct
                         continue
 
-                    # Now, in the following lines we are checking in the dummy
-                    # copy of the dataset if, in the same coordinates the
-                    # number is different from 0 if it is, it means that one of
-                    # the values that we corrected was already processed, hence
-                    # we will delete the repeated value from the correction
-                    selected_data = bool_dataset[var].loc[
-                        dict(
-                            time=data_to_corr.time,
-                            number=s,
-                            lat=data_to_corr.lat,
-                            lon=data_to_corr.lon,
+                    # If we have at least 1 point that felt into the percentile interval to correct
+                    # select corresponding lat/lon points in inter_reanalysis and inter_forecast
+                    # and check that datapoints selected were not already corrected
+
+                    filtered_valid_data = valid_data.where(
+                        bool_dataset[var].loc[sim_coords(valid_data, s)] < 1, drop=True
+                    )
+                    if filtered_valid_data.size == 0:
+                        continue
+
+                    # Select corresponding lat/lon points in inter_reanalysis and inter_forecast to performe the bias correction
+                    inter_reanalysis_corr = inter_reanalysis.sel(
+                        lat=filtered_valid_data["lat"], lon=filtered_valid_data["lon"]
+                    )
+                    inter_forecast_corr = inter_forecast.sel(
+                        lat=filtered_valid_data["lat"], lon=filtered_valid_data["lon"]
+                    )
+
+                    corr_data = adjust_wrapper_quantiles(
+                        method,
+                        ADJUST_N_QUANTILES[percentile.is_extreme],
+                        inter_reanalysis_corr,
+                        inter_forecast_corr,
+                        filtered_valid_data,
+                        # filtered_valid_data.rename({"time": "time_to_corr"}),
+                        ADJUST_KIND[var],
+                    )
+                    # Rename corrected time dimension
+                    # corr_data = corr_data.rename({"time_to_corr": "time"})
+
+                    if bool_dataset[var].loc[sim_coords(corr_data, s)].any():
+                        # If the bool dataset has values above 0, it means that some points have
+                        # been corrected before, so we need to filter them before saving corrected data,
+                        # if not, we just save data into the xarray dataset
+                        int_bool_dataset = bool_dataset[var].loc[
+                            sim_coords(corr_data, s)
+                        ]
+                        non_nan_coords = corr_data.where(
+                            int_bool_dataset == 0, drop=True
+                        ).stack(
+                            all_coords=("lat", "lon", "time")
+                        )  # Filter already corrected data
+                        corr_data = non_nan_coords.where(
+                            non_nan_coords.notnull(), drop=True
                         )
+
+                    # Update corrected_forecast and bool_dataset for all valid points simultaneously
+                    corrected_forecast[var].loc[sim_coords(corr_data, s)] = corr_data[
+                        var
                     ]
-                    filtered_data = selected_data.where(selected_data < 1, drop=True)
-
-                    if filtered_data.shape != corr_data[var].shape:
-                        # if filtered_data has a different shape from
-                        # corr_data, it means that one of the values was
-                        # already processed, hence we will filter the repeated
-                        # value from the corrected dataset
-                        corr_data = corr_data.sel(time=filtered_data.time)
-
-                    # Now, we will include the corrected values into the xarray dataset
-                    corrected_forecast[var].loc[
-                        dict(
-                            time=corr_data.time,
-                            number=s,
-                            lat=corr_data.lat,
-                            lon=corr_data.lon,
-                        )
-                    ] = corr_data[var].values
-
-                    # We increase the dummy dataset values by one in the processed coordinates to mark that the specified coordinates was already preprocessed
-                    bool_dataset[var].loc[
-                        dict(
-                            time=corr_data.time,
-                            number=s,
-                            lat=corr_data.lat,
-                            lon=corr_data.lon,
-                        )
-                    ] += 1
+                    bool_dataset[var].loc[sim_coords(corr_data, s)] = True
+                    # print(bool_dataset[var].loc[sim_coords(corr_data, s)])
             logger.info("Finished correction at %r", percentile)
 
     # The bias correction method deletes units for relative humidity so we need to rewrite it
