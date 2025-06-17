@@ -643,7 +643,7 @@ def bias_correct_forecast(
                     # and check that datapoints selected were not already corrected
 
                     filtered_valid_data = valid_data.where(
-                        bool_dataset[var].loc[sim_coords(valid_data, s)] < 1, drop=True
+                        bool_dataset[var].loc[sim_coords(valid_data, s)] == False, drop=True
                     )
                     if filtered_valid_data.size == 0:
                         continue
@@ -676,7 +676,7 @@ def bias_correct_forecast(
                             sim_coords(corr_data, s)
                         ]
                         non_nan_coords = corr_data.where(
-                            int_bool_dataset == 0, drop=True
+                            int_bool_dataset == False, drop=True
                         ).stack(
                             all_coords=("lat", "lon", "time")
                         )  # Filter already corrected data
