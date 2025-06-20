@@ -667,7 +667,6 @@ def bias_correct_forecast(
                     inter_forecast_corr = inter_forecast.sel(
                         lat=filtered_valid_data["lat"], lon=filtered_valid_data["lon"]
                     )
-
                     corr_data = adjust_wrapper_quantiles(
                         method,
                         ADJUST_N_QUANTILES[percentile.is_extreme],
@@ -695,11 +694,13 @@ def bias_correct_forecast(
                         corr_data = non_nan_coords.where(
                             non_nan_coords.notnull(), drop=True
                         )
-
                     # Update corrected_forecast and bool_dataset for all valid points simultaneously
                     corrected_forecast[var].loc[sim_coords(corr_data, s)] = corr_data[
                         var
-                    ]
+                    ].where(
+                        corr_data[var].notnull(),
+                        corrected_forecast[var].loc[sim_coords(corr_data, s)],
+                    )
                     bool_dataset[var].loc[sim_coords(corr_data, s)] = True
                     # print(bool_dataset[var].loc[sim_coords(corr_data, s)])
             logger.info("Finished correction at %r", percentile)
