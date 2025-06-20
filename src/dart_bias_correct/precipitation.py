@@ -1,11 +1,15 @@
 """Bias correction module (precipitation)"""
 
+import logging
 from pathlib import Path
 
 import xarray as xr
 import cmethods
+from geoglue.types import Bbox
 
 from .util import is_hourly
+
+logger = logging.getLogger(__name__)
 
 
 def adjust_wrapper_tp(
@@ -34,6 +38,28 @@ def adjust_wrapper_tp(
         n_quantiles=100,
         kind="*",
     )
+
+
+def crop_bbox(ds: xr.Dataset, bbox: Bbox) -> xr.Dataset:
+    return ds.sel(
+        latitude=slice(bbox.maxy, bbox.miny), longitude=slice(bbox.minx, bbox.maxx)
+    )
+
+
+def align_geo_extents(
+    ds1: xr.Dataset, ds2: xr.Dataset
+) -> tuple[xr.Dataset, xr.Dataset]:
+    ds1_bbox = Bbox.from_xarray(ds1)
+    ds2_bbox = Bbox.from_xarray(ds2)
+    if ds1_bbox == ds2_bbox:
+        return ds1, ds2
+    if ds1_bbox < ds2_bbox:
+        return ds1, crop_bbox(ds2, ds1_bbox)
+    if ds2_bbox < ds1_bbox:
+        return crop_bbox(ds1, ds2_bbox), ds2
+    raise ValueError(f"""Could not align geospatial extents for:
+    ds1: {ds1_bbox}
+    ds2: {ds2_bbox}""")
 
 
 def bias_correct_precipitation(
@@ -71,7 +97,17 @@ def bias_correct_precipitation(
         Path where corrected dataset was written to
     """
     tp_ref = xr.open_dataset(reference_dataset)
-    era_tp = xr.open_dataset(uncorrected_dataset).rename({"valid_time": "time"})
+    era_tp = xr.open_dataset(uncorrected_dataset)
+    dataset_to_correct = Path(dataset_to_correct)
+    if "valid_time" in era_tp.coords:
+        era_tp = era_tp.rename({"valid_time": "time"})
+    tstart = max(tp_ref.time.min().values, era_tp.time.min().values)
+    tend = min(tp_ref.time.max().values, era_tp.time.max().values)
+    logger.info("Cropping time axis to common extents: %s --> %s", tstart, tend)
+    tp_ref = tp_ref.sel(time=slice(tstart, tend))
+    era_tp = era_tp.sel(time=slice(tstart, tend))
+
+    tp_ref, era_tp = align_geo_extents(tp_ref, era_tp)
 
     # Read in dataset to correct
     accum_vars = xr.open_dataset(dataset_to_correct).rename({"valid_time": "time"})
@@ -84,4 +120,5 @@ def bias_correct_precipitation(
         dataset_to_correct.stem + ".tp_corrected.nc"
     )
     corrected_tp.to_netcdf(output_file)
+    logger.info("Output: %s", output_file)
     return output_file
