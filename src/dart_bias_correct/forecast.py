@@ -249,9 +249,7 @@ def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
             data_raw_forecast
         )  # .resample(step="1D").sum(dim="step") # In the case of accumulated variables, the forecast give us the total accumulation of the variable per timestep. THis means that if we select precipitation in step 7-14 days, it would select the accumulation of precipitation since beginning of forecast until day 7 or 14
     )
-    data_raw_forecast_inst = (
-        instant_vars(data_raw_forecast).resample(step="1D").mean(dim="step")
-    )
+    data_raw_forecast_inst = instant_vars(data_raw_forecast)
 
     # Weekly aggregation
     weekly_mean = data_raw_forecast_inst.resample(step="7D").mean(dim="step")[
@@ -656,7 +654,8 @@ def bias_correct_forecast(
                     # and check that datapoints selected were not already corrected
 
                     filtered_valid_data = valid_data.where(
-                        bool_dataset[var].loc[sim_coords(valid_data, s)] == False, drop=True
+                        bool_dataset[var].loc[sim_coords(valid_data, s)] == False,
+                        drop=True,
                     )
                     if filtered_valid_data.size == 0:
                         continue
