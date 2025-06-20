@@ -87,6 +87,18 @@ ADJUST_N_QUANTILES: dict[bool, int] = {True: 10, False: 200}
 ADJUST_KIND: dict[str, Literal["+", "*"]] = {"t2m": "+", "r": "+", "tp": "*"}
 
 
+def ensure_corrected_forecast_notnull(corrected_forecast: xr.Dataset):
+    err = []
+    if corrected_forecast.t2m_bc.isnull().any():
+        err.append("Corrected temperature (t2m_bc) field has NA values")
+    if corrected_forecast.r_bc.isnull().any():
+        err.append("Corrected relative humidity (r_bc) field has NA values")
+    if corrected_forecast.tp_bc.isnull().any():
+        err.append("Corrected precipitation (tp_bc) field has NA values")
+    if err:
+        raise ValueError("\n  " + "\n  ".join(err))
+
+
 def adjust_wrapper_quantiles(
     method: Literal["quantile_mapping", "quantile_delta_mapping"],
     n_quantiles: int,
@@ -524,6 +536,7 @@ def bias_correct_forecast_parallel(
 
     for var in ["r", "r_bc"]:
         weekly_raw_forecast[var] = weekly_raw_forecast[var] * units("percent")
+    ensure_corrected_forecast_notnull(weekly_raw_forecast)
     return weekly_raw_forecast
 
     # NOTE: resampling is not performed in dart-bias-correct, processing pipelines in
@@ -706,6 +719,7 @@ def bias_correct_forecast(
 
     for var in ["r", "r_bc"]:
         weekly_raw_forecast[var] = weekly_raw_forecast[var] * units("percent")
+    ensure_corrected_forecast_notnull(weekly_raw_forecast)
     return weekly_raw_forecast
 
     # NOTE: resampling is not performed in dart-bias-correct, processing pipelines in
