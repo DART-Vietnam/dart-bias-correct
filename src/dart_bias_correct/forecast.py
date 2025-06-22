@@ -788,6 +788,7 @@ def bias_correct_forecast_from_paths(
 
     # Use era5_hist bounds if no bbox supplied
     bbox = bbox or Bbox.from_xarray(era5_hist)
+    logger.info("Cropping datasets to %r", bbox)
     era5_hist = crop(supported_vars(era5_hist), bbox)
     data_hist_forecast = crop(supported_vars(data_hist_forecast), bbox)
 
