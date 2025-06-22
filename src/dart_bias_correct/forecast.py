@@ -13,16 +13,11 @@ import xarray as xr
 import metpy.calc as mp
 from metpy.units import units
 from cmethods import adjust
+from geoglue.types import Bbox
 
 from .util import get_dart_root
 
 logger = logging.getLogger(__name__)
-
-# TODO: This is temporary, should be fixed to use geoglue.region
-LATITUDE_SLICE = slice(11.25, 10)
-LONGITUDE_SLICE = slice(106, 107.25)
-# LATITUDE_SLICE = slice(24, 8)
-# LONGITUDE_SLICE = slice(102, 110)
 
 # r = relative_humidity, q = specific_humidity
 INSTANT_VARS = ["t2m", "d2m", "sp", "u10", "v10", "r", "q"]
@@ -761,20 +756,23 @@ def print_dataset(ds: xr.Dataset | xr.DataArray, name: str):
     print(ds)
 
 
-def crop(ds: xr.Dataset) -> xr.Dataset:
+def crop(ds: xr.Dataset, bbox: Bbox) -> xr.Dataset:
     if "lat" in ds.coords:
-        return ds.sel(lat=LATITUDE_SLICE, lon=LONGITUDE_SLICE)
+        return ds.sel(lat=bbox.lat_slice, lon=bbox.lon_slice)
     else:
-        return ds.sel(latitude=LATITUDE_SLICE, longitude=LONGITUDE_SLICE)
+        return ds.sel(latitude=bbox.lat_slice, longitude=bbox.lon_slice)
 
 
 def bias_correct_forecast_from_paths(
     era5_hist_path: Path,
     data_hist_forecast_path: Path,
     ecmwf_forecast_iso3_date: str,
-    method: Literal["quantile_mapping", "quantile_delta_mapping"],
+    bbox: str | Bbox | None = None,
+    method: Literal["quantile_mapping", "quantile_delta_mapping"] = "quantile_mapping",
     parallel: bool = False,
 ) -> Path:
+    if isinstance(bbox, str):
+        bbox = Bbox.from_string(bbox)
     if parallel:
         logger.info("Starting bias correct forecast [parallel] using %s", method)
     else:
@@ -787,14 +785,17 @@ def bias_correct_forecast_from_paths(
         era5_hist = era5_hist.rename_vars({"rh": "r"})
     if "rh" in data_hist_forecast.variables:
         data_hist_forecast = data_hist_forecast.rename_vars({"rh": "r"})
-    era5_hist = crop(supported_vars(era5_hist))
-    data_hist_forecast = crop(supported_vars(data_hist_forecast))
+
+    # Use era5_hist bounds if no bbox supplied
+    bbox = bbox or Bbox.from_xarray(era5_hist)
+    era5_hist = crop(supported_vars(era5_hist), bbox)
+    data_hist_forecast = crop(supported_vars(data_hist_forecast), bbox)
 
     # TODO: Assert shape equal
     logger.info("Reading ECMWF forecast data for: %s", ecmwf_forecast_iso3_date)
     data_raw_forecast = get_forecast_dataset(ecmwf_forecast_iso3_date)
 
-    data_raw_forecast = crop(data_raw_forecast)
+    data_raw_forecast = crop(data_raw_forecast, bbox)
 
     output_path = get_corrected_forecast_path(ecmwf_forecast_iso3_date, parallel)
     logger.info("Expected output path on successful correction: %s", output_path)

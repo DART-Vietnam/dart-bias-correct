@@ -72,6 +72,11 @@ reference and uncorrected dataset
         help="Run bias correction in parallel (only for mode=forecast)",
         action="store_true",
     )
+
+    parser.add_argument(
+        "--bbox",
+        help="Bounding box to crop input datasets to, in the form: minx,miny,maxx,maxy. Only used by forecast",
+    )
     parser.add_argument(
         "-m",
         "--method",
@@ -94,8 +99,9 @@ reference and uncorrected dataset
                 args.reference_dataset,
                 args.uncorrected_dataset,
                 args.dataset_to_correct,
-                args.method,
-                args.parallel,
+                bbox=args.bbox,
+                method=args.method,
+                parallel=args.parallel,
             )
         case _:
             print(f"Unsupported mode: {args.mode}", file=sys.stderr)
