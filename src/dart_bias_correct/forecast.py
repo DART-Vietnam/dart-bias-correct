@@ -733,7 +733,7 @@ def get_forecast_dataset(ecmwf_forecast_iso3_date: str) -> xr.Dataset:
         raise FileNotFoundError(f"Accumulative variables file not found: {accum_file}")
     if not instant_file.exists():
         raise FileNotFoundError(
-            f"Accumulative variables file not found: {instant_file}"
+            f"Instantaneous variables file not found: {instant_file}"
         )
     instant = xr.open_dataset(instant_file, decode_timedelta=True)
     accum = xr.open_dataset(accum_file, decode_timedelta=True)
