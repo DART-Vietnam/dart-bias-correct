@@ -668,43 +668,22 @@ def bias_correct_forecast(
                         inter_reanalysis_corr,
                         inter_forecast_corr,
                         filtered_valid_data,
-                        # filtered_valid_data.rename({"time": "time_to_corr"}),
                         ADJUST_KIND[var],
                     )
-                    # Rename corrected time dimension
-                    # corr_data = corr_data.rename({"time_to_corr": "time"})
-
-                    #if bool_dataset[var].loc[sim_coords(corr_data, s)].any():
-                        # If the bool dataset has values above 0, it means that some points have
-                        # been corrected before, so we need to filter them before saving corrected data,
-                        # if not, we just save data into the xarray dataset
-                    #    int_bool_dataset = bool_dataset[var].loc[
-                    #        sim_coords(corr_data, s)
-                    #    ]
-                    #    non_nan_coords = corr_data.where(
-                    #        int_bool_dataset == False, drop=True
-                    #    ).stack(
-                    #        all_coords=("lat", "lon", "time")
-                    #    )  # Filter already corrected data
-                    #    corr_data = non_nan_coords.where(
-                    #        non_nan_coords.notnull(), drop=True
-                    #    )
-                    #Now we are going to check whether 1) if the data was already processed (True in booldenian dataset) and 2) (if the corrected data is a nan)
-                    int_bool_dataset=bool_dataset[var].loc[dict(time=corr_data["time"], number=s, lat=corr_data["lat"], lon=corr_data["lon"])].stack(all_coords=("lat", "lon", "time"))  # Filter already corrected data and stack in 1D
-                    non_nan_corr=corr_data.stack(all_coords=("lat", "lon", "time"))#.where(corr_data.notnull(), drop=True)  # Check if in corrected values we have nan data
-
-                    #Now we are going to retain corrected data that was not corrected and that is not NaN
-                    corr_data=non_nan_corr.where(((non_nan_corr.notnull() & (int_bool_dataset==False))), drop=True)
-
-
-                    
-                    # Update corrected_forecast and bool_dataset for all valid points simultaneously
-                    corrected_forecast[var].loc[sim_coords(corr_data, s)] = corr_data[
-                        var
-                    ].where(
-                        corr_data[var].notnull(),
-                        corrected_forecast[var].loc[sim_coords(corr_data, s)],
+                    int_bool_dataset = (
+                        bool_dataset[var]
+                        .loc[sim_coords(corr_data, s)]
+                        .stack(all_coords=("lat", "lon", "time"))
                     )
+                    non_nan_corr = corr_data.stack(all_coords=("lat", "lon", "time"))
+
+                    # Now we are going to retain corrected data that was not corrected and that is not NaN
+                    corr_data = non_nan_corr.where(
+                        non_nan_corr.notnull() & ~int_bool_dataset, drop=True
+                    )
+
+                    # Update corrected_forecast and bool_dataset for all valid points simultaneously
+                    corrected_forecast[var].loc[sim_coords(corr_data, s)] = corr_data[var]
                     bool_dataset[var].loc[sim_coords(corr_data, s)] = True
                     # print(bool_dataset[var].loc[sim_coords(corr_data, s)])
             logger.info("Finished correction at %r", percentile)
