@@ -6,8 +6,10 @@ from pathlib import Path
 import xarray as xr
 import cmethods
 from geoglue.types import Bbox
+from geoglue.region import gadm
+from geoglue.cds import ReanalysisSingleLevels
 
-from .util import is_hourly
+from .util import is_hourly, get_dart_root
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +65,7 @@ def align_geo_extents(
 
 
 def bias_correct_precipitation(
-    reference_dataset: Path, uncorrected_dataset: Path, dataset_to_correct: Path
+    reference_dataset: Path, uncorrected_dataset: Path, dataset_to_correct: str
 ) -> Path:
     """Bias correct precipitation data
 
@@ -86,10 +88,10 @@ def bias_correct_precipitation(
         .. shell::
             output/VNM/era5/VNM-2000-2020-era5.prep_bias_correct.precipitation.nc
 
-    dataset_to_correct : Path
-        Dataset to correct, this is usually a single year file such as
-        VNM-2020-era5.accum.nc but can also span multiple files, such as the
-        concatenated dataset produced above
+    dataset_to_correct : str
+        Dataset to correct, this is expressed in the form ISO3-YEAR, which loads
+        the dataset (and preceding and succeeding datasets according to timeshift)
+        for correction
 
     Returns
     -------
@@ -98,7 +100,14 @@ def bias_correct_precipitation(
     """
     tp_ref = xr.open_dataset(reference_dataset)
     era_tp = xr.open_dataset(uncorrected_dataset)
-    dataset_to_correct = Path(dataset_to_correct)
+    iso3, year = dataset_to_correct.split("-")
+    year = int(year)
+    data_path = get_dart_root() / "sources" / iso3 / "era5"
+    pool = ReanalysisSingleLevels(
+        gadm(iso3, 1), ["t2m", "tp"], path=data_path
+    ).get_dataset_pool()
+    output_file = data_path / f"{iso3}-{year}-era5.accum.tp_corrected.nc"
+    accum_vars = pool[year].accum
     if "valid_time" in era_tp.coords:
         era_tp = era_tp.rename({"valid_time": "time"})
     tstart = max(tp_ref.time.min().values, era_tp.time.min().values)
@@ -108,16 +117,11 @@ def bias_correct_precipitation(
     era_tp = era_tp.sel(time=slice(tstart, tend))
 
     tp_ref, era_tp = align_geo_extents(tp_ref, era_tp)
-
-    # Read in dataset to correct
-    accum_vars = xr.open_dataset(dataset_to_correct).rename({"valid_time": "time"})
+    accum_vars = accum_vars.rename({"valid_time": "time"})
     if is_hourly(accum_vars):
         accum_vars = accum_vars.resample(time="D").sum()
     corrected_tp = adjust_wrapper_tp(tp_ref.tp, era_tp.tp, accum_vars.tp).rename(
         {"time": "valid_time"}
-    )
-    output_file = dataset_to_correct.parent / (
-        dataset_to_correct.stem + ".tp_corrected.nc"
     )
     corrected_tp.to_netcdf(output_file)
     logger.info("Output: %s", output_file)
