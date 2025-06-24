@@ -463,7 +463,10 @@ def bias_correct_forecast(
                     # Update corrected_forecast and bool_dataset for all valid points simultaneously
                     corrected_forecast[var].loc[sim_coords(corr_data, s)] = corr_data[
                         var
-                    ]
+                    ].where(
+                        corr_data[var].notnull(),
+                        corrected_forecast[var].loc[sim_coords(corr_data, s)],
+                    )
                     bool_dataset[var].loc[sim_coords(corr_data, s)] = True
                     # print(bool_dataset[var].loc[sim_coords(corr_data, s)])
             logger.info("Finished correction at %r", percentile)
