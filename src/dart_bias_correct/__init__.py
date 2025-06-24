@@ -68,12 +68,6 @@ reference and uncorrected dataset
         help="Either a NetCDF file to correct or a special syntax era5:ISO3-year to correct a specific year of ERA5 data.",
     )
     parser.add_argument(
-        "--parallel",
-        help="Run bias correction in parallel (only for mode=forecast)",
-        action="store_true",
-    )
-
-    parser.add_argument(
         "--bbox",
         help="Bounding box to crop input datasets to, in the form: minx,miny,maxx,maxy. Only used by forecast",
     )
@@ -101,7 +95,6 @@ reference and uncorrected dataset
                 args.dataset_to_correct,
                 bbox=args.bbox,
                 method=args.method,
-                parallel=args.parallel,
             )
         case _:
             print(f"Unsupported mode: {args.mode}", file=sys.stderr)
