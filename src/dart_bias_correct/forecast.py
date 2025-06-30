@@ -327,7 +327,7 @@ def bias_correct_forecast(
     dates = np.array(
         np.array(data_hist_forecast.time)
     )  # Dtes in which the historical forecast data of the ECMWF begin
-    
+
     logger.info("Calculating weekly statistics for historical data")
     week1_mean = weekly_stats_era5(
         era5_hist, initial_time=dates, timestep=7, agg="mean"
@@ -412,16 +412,27 @@ def bias_correct_forecast(
 
                     data_to_corr = data_to_corr_or[var]
                     # Filtering data from future forecast outside the percentile range considered
-                    #data_to_corr = data_to_corr.where(
-                    #    (data_to_corr >= inter_forecast.min(dim="time"))
-                    #    & (data_to_corr < inter_forecast.max(dim="time")),
-                    #    drop=True,
-                    #)
-                   low_th=data_hist_forecast[var].where(masks[var][m]).sel(step=f"{step}.days").min(dim="time").min(dim="number") # we search for the lowest value 
-                   high_th=data_hist_forecast[var].where(masks[var][m]).sel(step=f"{step}.days").max(dim="time").max(dim="number")
+                    # Search for lowest and highest value across all simulations
+                    low_th = (
+                        data_hist_forecast[var]
+                        .where(masks[var][m])
+                        .sel(step=f"{step}.days")
+                        .min(dim="time")
+                        .min(dim="number")
+                    )
+                    high_th = (
+                        data_hist_forecast[var]
+                        .where(masks[var][m])
+                        .sel(step=f"{step}.days")
+                        .max(dim="time")
+                        .max(dim="number")
+                    )
 
-                   valid_data=data_to_corr_or[var].where((data_to_corr_or[var]>=low_th)&
-                                                               (data_to_corr_or[var]<high_th),drop=True)   
+                    valid_data = data_to_corr_or[var].where(
+                        (data_to_corr_or[var] >= low_th)
+                        & (data_to_corr_or[var] < high_th),
+                        drop=True,
+                    )
 
                     valid_data = data_to_corr
                     if valid_data.size == 0:  # nothing to correct
