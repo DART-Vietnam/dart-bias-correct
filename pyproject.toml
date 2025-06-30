@@ -26,5 +26,6 @@ geoglue = { git = "https://github.com/kraemer-lab/geoglue" }
 [dependency-groups]
 dev = [
     "ipykernel>=6.29.5",
+    "pytest>=8.4.1",
 ]
 
