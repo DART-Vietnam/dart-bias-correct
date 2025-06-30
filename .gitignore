@@ -10,6 +10,12 @@ _build/
 data/**/*.txt
 data/**/*.html
 
+# not open access
+*historical*.nc
+
+# generate corrected forecast in CI
+*forecast.corrected.nc
+
 # Images
 *.avif
 *.bmp
