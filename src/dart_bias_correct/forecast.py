@@ -327,7 +327,7 @@ def bias_correct_forecast(
     dates = np.array(
         np.array(data_hist_forecast.time)
     )  # Dtes in which the historical forecast data of the ECMWF begin
-
+    
     logger.info("Calculating weekly statistics for historical data")
     week1_mean = weekly_stats_era5(
         era5_hist, initial_time=dates, timestep=7, agg="mean"
@@ -561,11 +561,16 @@ def bias_correct_forecast_from_paths(
 
     # TODO: Assert shape equal
     logger.info("Reading ECMWF forecast data for: %s", ecmwf_forecast_iso3_date)
-    data_raw_forecast = get_forecast_dataset(ecmwf_forecast_iso3_date)
-
+    if ecmwf_forecast_iso3_date.endswith(".nc"):  # is a file, read directly
+        forecast_path = Path(ecmwf_forecast_iso3_date)
+        data_raw_forecast = xr.open_dataset(forecast_path, decode_timedelta=True)
+        output_path = forecast_path.parent / (forecast_path.stem + ".corrected.nc")
+    else:
+        data_raw_forecast = get_forecast_dataset(ecmwf_forecast_iso3_date)
+        output_path = get_corrected_forecast_path(
+            ecmwf_forecast_iso3_date, parallel=False
+        )
     data_raw_forecast = crop(data_raw_forecast, bbox)
-
-    output_path = get_corrected_forecast_path(ecmwf_forecast_iso3_date, parallel=False)
     logger.info("Expected output path on successful correction: %s", output_path)
     ds = bias_correct_forecast(era5_hist, data_hist_forecast, data_raw_forecast, method)
     ds.to_netcdf(output_path)
