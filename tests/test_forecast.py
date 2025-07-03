@@ -27,7 +27,7 @@ def corrected_forecast():
 
 
 # TODO: Once forecast code is finalised, remove xfail marker
-@pytest.mark.xfail(reason="Snapshot tests, values may change with code changes")
+@pytest.mark.xfail(reason="Snapshot tests")
 def test_forecast_snapshot(corrected_forecast):
     npt.assert_approx_equal(
         (corrected_forecast.t2m_bc - corrected_forecast.t2m).max().item(),
@@ -43,6 +43,7 @@ def test_forecast_snapshot(corrected_forecast):
 
 
 def test_forecast_value_bounds(corrected_forecast):
+    assert "pevt" in corrected_forecast.data_vars
     assert (corrected_forecast.t2m_bc - corrected_forecast.t2m).max().item() > 1
     assert (corrected_forecast.r_bc - corrected_forecast.r).max().item() > 1
     assert (corrected_forecast.tp_bc - corrected_forecast.tp).max().item() > 0.1

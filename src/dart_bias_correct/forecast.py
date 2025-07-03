@@ -1,10 +1,6 @@
 """Bias correction module (forecast)"""
 
 import logging
-import itertools
-import functools
-import collections
-import multiprocessing
 from typing import Literal, NamedTuple
 from pathlib import Path
 
@@ -13,6 +9,7 @@ import xarray as xr
 import metpy.calc as mp
 from metpy.units import units
 from cmethods import adjust
+import xclim.indicators.atmos
 from geoglue.types import Bbox
 
 from .util import get_dart_root
@@ -229,10 +226,38 @@ def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
     )
     data_raw_forecast_inst = instant_vars(data_raw_forecast)
 
+    # pevt calculation
+    # assign time instead of step as xclim expects that
+    t2m = (
+        data_raw_forecast_inst.t2m.assign_coords(
+            time=data_raw_forecast_inst["time"] + data_raw_forecast_inst["step"]
+        )
+        .drop_vars(["heightAboveGround", "surface"])
+        .swap_dims({"step": "time"})
+    )
+    temp_daily = xr.Dataset(
+        {
+            "t2m": t2m.resample(time="1D").mean(),
+            "mx2t24": t2m.resample(time="1D").max(),
+            "mn2t24": t2m.resample(time="1D").min(),
+        }
+    )
+    pevt_daily: xr.DataArray = xclim.indicators.atmos.potential_evapotranspiration(  # type: ignore
+        tasmin=temp_daily.mn2t24, tasmax=temp_daily.mx2t24, tas=temp_daily.t2m
+    )
+    # select the first 14 days (2 weeks)
+    pevt = (
+        pevt_daily.isel(time=slice(0, 14))
+        .resample(time="7D", closed="left", label="left")
+        .sum()
+        .rename("pevt")
+    )
+
     # Weekly aggregation
     weekly_mean = data_raw_forecast_inst.resample(step="7D").mean(dim="step")[
         ["t2m", "r", "q"]
     ]
+
     weekly_max = (
         data_raw_forecast_inst.resample(step="1D")
         .max(dim="step")
@@ -311,7 +336,7 @@ def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
         .drop_vars(["heightAboveGround", "surface"])
         .swap_dims({"step": "time"})
     )
-    return weekly_raw_forecast
+    return xr.merge([weekly_raw_forecast, pevt])
 
 
 def sim_coords(ds: xr.DataArray | xr.Dataset, number: int) -> dict:
@@ -327,7 +352,7 @@ def bias_correct_forecast(
     dates = np.array(
         np.array(data_hist_forecast.time)
     )  # Dtes in which the historical forecast data of the ECMWF begin
-    
+
     logger.info("Calculating weekly statistics for historical data")
     week1_mean = weekly_stats_era5(
         era5_hist, initial_time=dates, timestep=7, agg="mean"
