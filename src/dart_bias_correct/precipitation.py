@@ -65,6 +65,56 @@ def align_geo_extents(
 
 
 def bias_correct_precipitation(
+    tp_ref: xr.Dataset, era_tp: xr.Dataset, dataset_to_correct: xr.Dataset
+) -> xr.DataArray:
+    """Bias correct precipitation data
+
+    Parameters
+    ----------
+    tp_ref : xr.Dataset
+        Reference dataset to use. This is usually externally provided
+        from independent studies performing rainfall gauge measurements.
+    era_tp : xr.Dataset
+        ERA5 uncorrected dataset. This is usually concatenated ERA5 total_precipitation
+        data, which can be obtained from dart-pipeline:
+
+        .. shell::
+            dart-pipeline process era5.prep_bias_correct VNM 2000-2020 profile=precipitation
+
+        The above command would produce a concatenated netCDF file that comprised
+        the years 2000-2020 for Vietnam, and would be saved in the dart-pipeline
+        output folder as
+
+        .. shell::
+            output/VNM/era5/VNM-2000-2020-era5.prep_bias_correct.precipitation.nc
+
+    dataset_to_correct : xr.Dataset
+        Dataset to correct
+    Returns
+    -------
+    Path
+        Path where corrected dataset was written to
+    """
+    accum_vars = dataset_to_correct.accum
+    if "valid_time" in era_tp.coords:
+        era_tp = era_tp.rename({"valid_time": "time"})
+    # crop to common temporal extent between both datasets
+    tstart = max(tp_ref.time.min().values, era_tp.time.min().values)
+    tend = min(tp_ref.time.max().values, era_tp.time.max().values)
+    logger.info("Cropping time axis to common extents: %s --> %s", tstart, tend)
+    tp_ref = tp_ref.sel(time=slice(tstart, tend))
+    era_tp = era_tp.sel(time=slice(tstart, tend))
+
+    # align spatial extents
+    tp_ref, era_tp = align_geo_extents(tp_ref, era_tp)
+    accum_vars = accum_vars.rename({"valid_time": "time"})
+    corrected_tp = adjust_wrapper_tp(tp_ref.tp, era_tp.tp, accum_vars.tp).rename(
+        {"time": "valid_time"}
+    )
+    return corrected_tp
+
+
+def bias_correct_precipitation_from_paths(
     reference_dataset: Path, uncorrected_dataset: Path, dataset_to_correct: str
 ) -> Path:
     """Bias correct precipitation data
@@ -75,7 +125,7 @@ def bias_correct_precipitation(
         Reference dataset to use. This is usually externally provided
         from independent studies performing rainfall gauge measurements.
     uncorrected_dataset : Path
-        Dataset to correct. This is usually concatenated ERA5 total_precipitation
+        ERA5 uncorrected dataset. This is usually concatenated ERA5 total_precipitation
         data, which can be obtained from dart-pipeline:
 
         .. shell::
@@ -107,22 +157,10 @@ def bias_correct_precipitation(
         gadm(iso3, 1), ["t2m", "tp"], path=data_path
     ).get_dataset_pool()
     output_file = data_path / f"{iso3}-{year}-era5.accum.tp_corrected.nc"
-    accum_vars = pool[year].accum
-    if "valid_time" in era_tp.coords:
-        era_tp = era_tp.rename({"valid_time": "time"})
-    tstart = max(tp_ref.time.min().values, era_tp.time.min().values)
-    tend = min(tp_ref.time.max().values, era_tp.time.max().values)
-    logger.info("Cropping time axis to common extents: %s --> %s", tstart, tend)
-    tp_ref = tp_ref.sel(time=slice(tstart, tend))
-    era_tp = era_tp.sel(time=slice(tstart, tend))
-
-    tp_ref, era_tp = align_geo_extents(tp_ref, era_tp)
-    accum_vars = accum_vars.rename({"valid_time": "time"})
-    if is_hourly(accum_vars):
-        accum_vars = accum_vars.resample(time="D").sum()
-    corrected_tp = adjust_wrapper_tp(tp_ref.tp, era_tp.tp, accum_vars.tp).rename(
-        {"time": "valid_time"}
-    )
+    to_corr = pool[year]
+    corrected_tp = bias_correct_precipitation(tp_ref, era_tp, to_corr.accum)
+    if is_hourly(corrected_tp):
+        corrected_tp = corrected_tp.resample(valid_time="D").sum()
     corrected_tp.to_netcdf(output_file)
     logger.info("Output: %s", output_file)
     return output_file

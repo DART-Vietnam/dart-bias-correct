@@ -13,12 +13,9 @@ DATA_HOME = (
 )
 
 
-def is_hourly(ds: xr.Dataset, time_dim: str = "time") -> bool:
+def is_hourly(ds: xr.Dataset | xr.DataArray, time_dim: str = "time") -> bool:
     "Returns True if dataset is hourly"
-    return sorted(set(ds[time_dim].dt.strftime("%H:%M").to_numpy())) == [
-        f"{i:02d}:00" for i in range(24)
-    ]
-
+    return xr.infer_freq(ds[time_dim]) == "h"
 
 def get_dart_root() -> Path:
     return Path(os.getenv("DART_PIPELINE_DATA_HOME") or DATA_HOME / "dart-pipeline")
