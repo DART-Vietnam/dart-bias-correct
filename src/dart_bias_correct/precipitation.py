@@ -65,7 +65,7 @@ def align_geo_extents(
 
 
 def bias_correct_precipitation(
-    tp_ref: xr.Dataset, era_tp: xr.Dataset, dataset_to_correct: xr.Dataset
+    tp_ref: xr.Dataset, era_tp: xr.Dataset, accum_vars: xr.Dataset
 ) -> xr.DataArray:
     """Bias correct precipitation data
 
@@ -88,14 +88,13 @@ def bias_correct_precipitation(
         .. shell::
             output/VNM/era5/VNM-2000-2020-era5.prep_bias_correct.precipitation.nc
 
-    dataset_to_correct : xr.Dataset
+    accum_vars : xr.Dataset
         Dataset to correct
     Returns
     -------
     Path
         Path where corrected dataset was written to
     """
-    accum_vars = dataset_to_correct.accum
     if "valid_time" in era_tp.coords:
         era_tp = era_tp.rename({"valid_time": "time"})
     # crop to common temporal extent between both datasets
