@@ -28,6 +28,7 @@ jobs:
       - name: Copy restricted data
         run: |
           aws s3 cp s3://${{ env.BUCKET_NAME }}/dart-bias-correct/HCMC-historical.forecast.nc tests/data
+          aws s3 cp s3://${{ env.BUCKET_NAME }}/dart-bias-correct/HCMC-regrid_era_remoclic.nc tests/data
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:

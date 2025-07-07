@@ -12,6 +12,7 @@ data/**/*.html
 
 # not open access
 *historical*.nc
+tests/data/HCMC-regrid_era_remoclic.nc
 
 # generate corrected forecast in CI
 *forecast.corrected.nc
