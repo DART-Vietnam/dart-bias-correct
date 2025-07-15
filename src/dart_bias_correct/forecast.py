@@ -251,7 +251,7 @@ def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
         .resample(time="7D", closed="left", label="left")
         .sum()
         .rename("pevt")
-    )
+    ).astype("float32")
 
     # Weekly aggregation
     weekly_mean = data_raw_forecast_inst.resample(step="7D").mean(dim="step")[
