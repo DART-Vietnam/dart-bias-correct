@@ -106,7 +106,8 @@ def bias_correct_precipitation(
 
     # align spatial extents
     tp_ref, era_tp = align_geo_extents(tp_ref, era_tp)
-    accum_vars = accum_vars.rename({"valid_time": "time"})
+    if "valid_time" in accum_vars.coords:
+        accum_vars = accum_vars.rename({"valid_time": "time"})
     corrected_tp = adjust_wrapper_tp(tp_ref.tp, era_tp.tp, accum_vars.tp).rename(
         {"time": "valid_time"}
     )
