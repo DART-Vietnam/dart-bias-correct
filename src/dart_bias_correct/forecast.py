@@ -254,9 +254,12 @@ def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
     ).astype("float32")
 
     # Weekly aggregation
-    weekly_mean = data_raw_forecast_inst.resample(step="7D").mean(dim="step")[
-        ["t2m", "r", "q"]
-    ]
+    weekly_mean = (
+        data_raw_forecast_inst.resample(step="1D")
+        .mean(dim="step")
+        .resample(step="7D")
+        .mean(dim="step")[["t2m", "r", "q"]]
+    )
 
     weekly_max = (
         data_raw_forecast_inst.resample(step="1D")

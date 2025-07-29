@@ -26,15 +26,15 @@ def corrected_forecast():
     return ds
 
 
-# TODO: Once forecast code is finalised, remove xfail marker
-@pytest.mark.xfail(reason="Snapshot tests")
 def test_forecast_snapshot(corrected_forecast):
     npt.assert_approx_equal(
         (corrected_forecast.t2m_bc - corrected_forecast.t2m).max().item(),
-        2.6195068359375,
+        2.444122314453125,
     )
+    # This test only succeeds with significant=5 (down from default of significant=7)
+    # with varying results on macOS M1 and ubuntu-latest
     npt.assert_approx_equal(
-        (corrected_forecast.r_bc - corrected_forecast.r).max().item(), 5.165809631347656
+        (corrected_forecast.r_bc - corrected_forecast.r).max().item(), 5.1371, significant=5
     )
     npt.assert_approx_equal(
         (corrected_forecast.tp_bc - corrected_forecast.tp).max().item(),
