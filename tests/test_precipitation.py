@@ -27,9 +27,10 @@ def corrected_precipitation(uncorrected_precipitation):
     or alternatively, obtained from the authors for testing.""")
     tp_ref = xr.open_dataset(TP_REF)
     era_tp = xr.open_dataset(ERA_TP)
+    uncorrected_precipitation = uncorrected_precipitation.resample(valid_time="D").sum()
     return bias_correct_precipitation(tp_ref, era_tp, uncorrected_precipitation)
 
 
 def test_precipitation_is_corrected(corrected_precipitation, uncorrected_precipitation):
     max_diff = (corrected_precipitation.tp - uncorrected_precipitation.tp).max().values
-    npt.assert_approx_equal(max_diff, 0.015042116138517813)
+    npt.assert_approx_equal(max_diff, 0.11450434145720108)

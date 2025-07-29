@@ -108,6 +108,15 @@ def bias_correct_precipitation(
     tp_ref, era_tp = align_geo_extents(tp_ref, era_tp)
     if "valid_time" in accum_vars.coords:
         accum_vars = accum_vars.rename({"valid_time": "time"})
+
+    # Check that temporal resolutions match
+    tp_ref_res = xr.infer_freq(tp_ref.tp.time)
+    era_tp_res = xr.infer_freq(era_tp.tp.time)
+    accum_vars_res = xr.infer_freq(accum_vars.tp.time)
+    if not (tp_ref_res == era_tp_res == accum_vars_res):
+        raise ValueError(
+            f"Temporal resolutions must match, got {tp_ref_res=}, {era_tp_res=}, {accum_vars_res=}"
+        )
     corrected_tp = adjust_wrapper_tp(tp_ref.tp, era_tp.tp, accum_vars.tp).rename(
         {"time": "valid_time"}
     )
@@ -150,6 +159,16 @@ def bias_correct_precipitation_from_paths(
     """
     tp_ref = xr.open_dataset(reference_dataset)
     era_tp = xr.open_dataset(uncorrected_dataset)
+    tp_ref_res = xr.infer_freq(tp_ref.tp.time)
+    era_tp_res = xr.infer_freq(era_tp.tp.time)
+    if tp_ref_res != "D":
+        raise ValueError(
+            f"Reference dataset must be at daily resolution, got {tp_ref_res!r}"
+        )
+    if era_tp_res != "D":
+        raise ValueError(
+            f"Historical ERA5 dataset must be at daily resolution, got {era_tp_res!r}"
+        )
     iso3, year = dataset_to_correct.split("-")
     year = int(year)
     data_path = get_dart_root() / "sources" / iso3 / "era5"
@@ -158,9 +177,14 @@ def bias_correct_precipitation_from_paths(
     ).get_dataset_pool()
     output_file = data_path / f"{iso3}-{year}-era5.accum.tp_corrected.nc"
     to_corr = pool[year]
-    corrected_tp = bias_correct_precipitation(tp_ref, era_tp, to_corr.accum)
-    if is_hourly(corrected_tp):
-        corrected_tp = corrected_tp.resample(valid_time="D").sum()
+    uncorrected_tp = to_corr.accum.resample(valid_time="D").sum()
+    corrected_tp = bias_correct_precipitation(tp_ref, era_tp, uncorrected_tp)
+    tp_diff = corrected_tp.tp - uncorrected_tp.tp
+    logger.info(
+        "Minimum and maximum difference (bias_corrected - orig): %.6f, %.6f",
+        tp_diff.min().item(),
+        tp_diff.max().item(),
+    )
     corrected_tp.to_netcdf(output_file)
     logger.info("Output: %s", output_file)
     return output_file
