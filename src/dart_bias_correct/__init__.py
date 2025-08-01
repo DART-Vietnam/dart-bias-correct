@@ -72,6 +72,12 @@ reference and uncorrected dataset
         help="Bounding box to crop input datasets to, in the form: minx,miny,maxx,maxy. Only used by forecast",
     )
     parser.add_argument(
+        "--clip-precip-percentile",
+        help="Clip reference dataset at this percentile (precipitation)",
+        type=float,
+        default=0.99,
+    )
+    parser.add_argument(
         "-m",
         "--method",
         help="Method to use for bias correction (forecast)",
@@ -87,6 +93,7 @@ reference and uncorrected dataset
                 args.reference_dataset,
                 args.uncorrected_dataset,
                 args.dataset_to_correct,
+                args.clip_precip_percentile
             )
         case "forecast":
             bias_correct_forecast_from_paths(

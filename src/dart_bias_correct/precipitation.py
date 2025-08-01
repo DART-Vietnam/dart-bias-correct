@@ -65,7 +65,10 @@ def align_geo_extents(
 
 
 def bias_correct_precipitation(
-    tp_ref: xr.Dataset, era_tp: xr.Dataset, accum_vars: xr.Dataset
+    tp_ref: xr.Dataset,
+    era_tp: xr.Dataset,
+    accum_vars: xr.Dataset,
+    clip_precip_percentile: float,
 ) -> xr.DataArray:
     """Bias correct precipitation data
 
@@ -90,6 +93,11 @@ def bias_correct_precipitation(
 
     accum_vars : xr.Dataset
         Dataset to correct
+    clip_precip_percentile : float
+        Percentile at which to clip reference precipitation dataset, default=0.99.
+        This is done to mitigate issues with quantile mapping for outlier precipitation
+        values.
+
     Returns
     -------
     Path
@@ -117,6 +125,15 @@ def bias_correct_precipitation(
         raise ValueError(
             f"Temporal resolutions must match, got {tp_ref_res=}, {era_tp_res=}, {accum_vars_res=}"
         )
+    # clip reference data to avoid outlier issues with quantile mapping
+    if clip_precip_percentile < 1:
+        logger.info(
+            "Clipping reference data to avoid outlier issues at percentile = %f",
+            clip_precip_percentile,
+        )
+        max_precip = tp_ref.tp.quantile(clip_precip_percentile, dim="time")
+        tp_ref["tp"] = tp_ref.tp.clip(0, max_precip)
+
     corrected_tp = adjust_wrapper_tp(tp_ref.tp, era_tp.tp, accum_vars.tp).rename(
         {"time": "valid_time"}
     )
@@ -124,7 +141,10 @@ def bias_correct_precipitation(
 
 
 def bias_correct_precipitation_from_paths(
-    reference_dataset: Path, uncorrected_dataset: Path, dataset_to_correct: str
+    reference_dataset: Path,
+    uncorrected_dataset: Path,
+    dataset_to_correct: str,
+    clip_precip_percentile: float = 0.99,
 ) -> Path:
     """Bias correct precipitation data
 
@@ -151,6 +171,10 @@ def bias_correct_precipitation_from_paths(
         Dataset to correct, this is expressed in the form ISO3-YEAR, which loads
         the dataset (and preceding and succeeding datasets according to timeshift)
         for correction
+    clip_precip_percentile : float
+        Percentile at which to clip reference precipitation dataset, default=0.99.
+        This is done to mitigate issues with quantile mapping for outlier precipitation
+        values.
 
     Returns
     -------
@@ -159,6 +183,10 @@ def bias_correct_precipitation_from_paths(
     """
     tp_ref = xr.open_dataset(reference_dataset)
     era_tp = xr.open_dataset(uncorrected_dataset)
+    if "time" not in tp_ref.coords:
+        raise ValueError("tp_ref should have a 'time' coordinate")
+    if "time" not in era_tp.coords:
+        raise ValueError("era_tp should have a 'time' coordinate")
     tp_ref_res = xr.infer_freq(tp_ref.tp.time)
     era_tp_res = xr.infer_freq(era_tp.tp.time)
     if tp_ref_res != "D":
@@ -178,7 +206,9 @@ def bias_correct_precipitation_from_paths(
     output_file = data_path / f"{iso3}-{year}-era5.accum.tp_corrected.nc"
     to_corr = pool[year]
     uncorrected_tp = to_corr.accum.resample(valid_time="D").sum()
-    corrected_tp = bias_correct_precipitation(tp_ref, era_tp, uncorrected_tp)
+    corrected_tp = bias_correct_precipitation(
+        tp_ref, era_tp, uncorrected_tp, clip_precip_percentile
+    )
     tp_diff = corrected_tp.tp - uncorrected_tp.tp
     logger.info(
         "Minimum and maximum difference (bias_corrected - orig): %.6f, %.6f",
