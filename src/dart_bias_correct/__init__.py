@@ -73,7 +73,7 @@ reference and uncorrected dataset
     )
     parser.add_argument(
         "--clip-precip-percentile",
-        help="Clip reference dataset at this percentile (precipitation)",
+        help="Clip reference dataset at this percentile (precipitation), default=0.99",
         type=float,
         default=0.99,
     )
