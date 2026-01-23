@@ -201,7 +201,7 @@ def bias_correct_precipitation_from_paths(
     year = int(year)
     data_path = get_dart_root() / "sources" / iso3 / "era5"
     pool = ReanalysisSingleLevels(
-        gadm(iso3, 1), ["t2m", "tp"], path=data_path
+        gadm(iso3), ["t2m", "tp"], path=data_path
     ).get_dataset_pool()
     output_file = data_path / f"{iso3}-{year}-era5.accum.tp_corrected.nc"
     to_corr = pool[year]
