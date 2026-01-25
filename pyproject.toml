@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Abhishek Dasgupta", email = "abhishek.dasgupta@dtc.ox.ac.uk" }
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "metpy>=1.7.0",
     "python-cmethods>=2.3.1",
