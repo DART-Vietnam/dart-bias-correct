@@ -22,7 +22,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv.sources]
-geoglue = { git = "https://github.com/kraemer-lab/geoglue", branch = "main" }
+geoglue = { git = "https://github.com/kraemer-lab/geoglue" }
 
 [dependency-groups]
 dev = [
