@@ -493,7 +493,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "geoglue", git = "https://github.com/kraemer-lab/geoglue?branch=main" },
+    { name = "geoglue", git = "https://github.com/kraemer-lab/geoglue" },
     { name = "metpy", specifier = ">=1.7.0" },
     { name = "python-cmethods", specifier = ">=2.3.1" },
     { name = "xclim", specifier = ">=0.57.0" },
@@ -762,7 +762,7 @@ wheels = [
 [[package]]
 name = "geoglue"
 version = "0.1.0"
-source = { git = "https://github.com/kraemer-lab/geoglue?branch=main#3e4d0506b21befe12ef905fe434aec6d2e8be7af" }
+source = { git = "https://github.com/kraemer-lab/geoglue#3e4d0506b21befe12ef905fe434aec6d2e8be7af" }
 dependencies = [
     { name = "cdo" },
     { name = "cdsapi" },
