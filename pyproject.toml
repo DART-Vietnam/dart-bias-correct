@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Abhishek Dasgupta", email = "abhishek.dasgupta@dtc.ox.ac.uk" }
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "metpy>=1.7.0",
     "python-cmethods>=2.3.1",
@@ -22,7 +22,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv.sources]
-geoglue = { git = "https://github.com/kraemer-lab/geoglue" }
+geoglue = { git = "https://github.com/kraemer-lab/geoglue", rev = "2eb6dbbc2ec349a0bae8804959c20c627755f543" }
 
 [dependency-groups]
 dev = [
