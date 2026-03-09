@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Bias correction module for the DART Pipeline"
 readme = "README.md"
 authors = [
-    { name = "Abhishek Dasgupta", email = "abhishek.dasgupta@dtc.ox.ac.uk" }
+    { name = "Abhishek Dasgupta", email = "abhishek.dasgupta@dtc.ox.ac.uk" },
 ]
 requires-python = ">=3.11"
 dependencies = [
@@ -22,11 +22,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv.sources]
-geoglue = { git = "https://github.com/kraemer-lab/geoglue", rev = "2eb6dbbc2ec349a0bae8804959c20c627755f543" }
+geoglue = { git = "https://github.com/kraemer-lab/geoglue", rev = "3db42f48a519c6fe85837609c27a36033e9d753d" }
 
 [dependency-groups]
-dev = [
-    "ipykernel>=6.29.5",
-    "pytest>=8.4.1",
-]
-
+dev = ["ipykernel>=6.29.5", "pytest>=8.4.1"]
