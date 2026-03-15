@@ -9,7 +9,7 @@ import xarray as xr
 import metpy.calc as mp
 from metpy.units import units
 from cmethods import adjust
-import xclim.indicators.atmos
+import xclim.indicators.convert
 from geoglue.types import Bbox
 
 from .util import get_dart_root
@@ -242,7 +242,7 @@ def get_weekly_forecast(data_raw_forecast: xr.Dataset) -> xr.Dataset:
             "mn2t24": t2m.resample(time="1D").min(),
         }
     )
-    pevt_daily: xr.DataArray = xclim.indicators.atmos.potential_evapotranspiration(  # type: ignore
+    pevt_daily: xr.DataArray = xclim.indicators.convert.potential_evapotranspiration(  # type: ignore
         tasmin=temp_daily.mn2t24, tasmax=temp_daily.mx2t24, tas=temp_daily.t2m
     )
     # select the first 14 days (2 weeks)
