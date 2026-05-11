@@ -22,7 +22,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv.sources]
-geoglue = { git = "https://github.com/kraemer-lab/geoglue", rev = "3db42f48a519c6fe85837609c27a36033e9d753d" }
+geoglue = { git = "https://github.com/kraemer-lab/geoglue", rev = "59a760644be7532cb6a3fe19ac4b1a49fb1cafdf" }
 
 [dependency-groups]
 dev = ["ipykernel>=6.29.5", "pytest>=8.4.1"]
