@@ -638,7 +638,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "geoglue", git = "https://github.com/kraemer-lab/geoglue?rev=59a760644be7532cb6a3fe19ac4b1a49fb1cafdf" },
+    { name = "geoglue", git = "https://github.com/kraemer-lab/geoglue?rev=weekly-reduce-partial-year" },
     { name = "metpy", specifier = ">=1.7.0" },
     { name = "python-cmethods", specifier = ">=2.3.1" },
     { name = "xclim", specifier = ">=0.57.0" },
@@ -949,7 +949,7 @@ wheels = [
 [[package]]
 name = "geoglue"
 version = "0.1.0"
-source = { git = "https://github.com/kraemer-lab/geoglue?rev=59a760644be7532cb6a3fe19ac4b1a49fb1cafdf#59a760644be7532cb6a3fe19ac4b1a49fb1cafdf" }
+source = { git = "https://github.com/kraemer-lab/geoglue?rev=weekly-reduce-partial-year#d5635a124b2f698787b77adbbd03d28ccf7d2896" }
 dependencies = [
     { name = "cdo" },
     { name = "cdsapi" },
