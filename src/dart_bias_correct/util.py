@@ -18,4 +18,4 @@ def is_hourly(ds: xr.Dataset | xr.DataArray, time_dim: str = "time") -> bool:
     return xr.infer_freq(ds[time_dim]) == "h"
 
 def get_dart_root() -> Path:
-    return Path(os.getenv("DART_PIPELINE_DATA_HOME") or DATA_HOME / "dart-pipeline")
+    return Path(os.getenv("DART_PIPELINE_DATA_HOME") or DATA_HOME) / "dart-pipeline"
