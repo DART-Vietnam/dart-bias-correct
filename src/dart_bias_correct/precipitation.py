@@ -33,7 +33,7 @@ def adjust_wrapper_tp(
     xr.DataArray
     """
     # align long,lat dim b4 running through adjust
-    obs, simh, simp = xr.align(obs, simh, simp, join="inner", exclude=None)
+    obs, simh, simp = xr.align(obs, simh, simp, join="inner")
     
     return cmethods.adjust(
         method="quantile_delta_mapping",  # methodology to correct data
