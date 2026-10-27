@@ -22,7 +22,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv.sources]
-geoglue = { git = "https://github.com/kraemer-lab/geoglue", rev = "weekly-reduce-partial-year" }
+geoglue = { git = "https://github.com/kraemer-lab/geoglue", rev = "main" }
 
 [dependency-groups]
 dev = ["ipykernel>=6.29.5", "pytest>=8.4.1"]
