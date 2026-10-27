@@ -3,13 +3,13 @@
 import logging
 from pathlib import Path
 
-import xarray as xr
 import cmethods
-from geoglue.types import Bbox
-from geoglue.region import gadm
+import xarray as xr
 from geoglue.cds import ReanalysisSingleLevels
+from geoglue.region import gadm
+from geoglue.types import Bbox
 
-from .util import is_hourly, get_dart_root
+from .util import get_dart_root
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ def adjust_wrapper_tp(
     """
     # align long,lat dim b4 running through adjust
     obs, simh, simp = xr.align(obs, simh, simp, join="inner", exclude=["time"])
-    
+
     return cmethods.adjust(
         method="quantile_delta_mapping",  # methodology to correct data
         obs=obs,

@@ -1,9 +1,9 @@
 import argparse
-import sys
 import logging
+import sys
 
-from .precipitation import bias_correct_precipitation_from_paths
 from .forecast import bias_correct_forecast_from_paths
+from .precipitation import bias_correct_precipitation_from_paths
 
 LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
 logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
@@ -93,7 +93,7 @@ reference and uncorrected dataset
                 args.reference_dataset,
                 args.uncorrected_dataset,
                 args.dataset_to_correct,
-                args.clip_precip_percentile
+                args.clip_precip_percentile,
             )
         case "forecast":
             bias_correct_forecast_from_paths(
