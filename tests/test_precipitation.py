@@ -2,9 +2,10 @@
 
 from pathlib import Path
 
+import numpy.testing as npt
 import pytest
 import xarray as xr
-import numpy.testing as npt
+
 from dart_bias_correct.precipitation import bias_correct_precipitation
 
 # This file is not open access and must be fetched from dart-pipeline-private
@@ -28,7 +29,9 @@ def corrected_precipitation(uncorrected_precipitation):
     tp_ref = xr.open_dataset(TP_REF)
     era_tp = xr.open_dataset(ERA_TP)
     uncorrected_precipitation = uncorrected_precipitation.resample(valid_time="D").sum()
-    return bias_correct_precipitation(tp_ref, era_tp, uncorrected_precipitation, clip_precip_percentile=0.99)
+    return bias_correct_precipitation(
+        tp_ref, era_tp, uncorrected_precipitation, clip_precip_percentile=0.99
+    )
 
 
 def test_precipitation_is_corrected(corrected_precipitation, uncorrected_precipitation):

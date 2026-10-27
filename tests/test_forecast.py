@@ -2,9 +2,10 @@
 
 from pathlib import Path
 
+import numpy.testing as npt
 import pytest
 import xarray as xr
-import numpy.testing as npt
+
 from dart_bias_correct.forecast import bias_correct_forecast_from_paths
 
 OBS = Path("tests/data/HCMC-era5.nc")
@@ -34,7 +35,9 @@ def test_forecast_snapshot(corrected_forecast):
     # This test only succeeds with significant=5 (down from default of significant=7)
     # with varying results on macOS M1 and ubuntu-latest
     npt.assert_approx_equal(
-        (corrected_forecast.r_bc - corrected_forecast.r).max().item(), 5.1371, significant=5
+        (corrected_forecast.r_bc - corrected_forecast.r).max().item(),
+        5.1371,
+        significant=5,
     )
     npt.assert_approx_equal(
         (corrected_forecast.tp_bc - corrected_forecast.tp).max().item(),

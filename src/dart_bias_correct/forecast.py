@@ -1,16 +1,16 @@
 """Bias correction module (forecast)"""
 
 import logging
-from typing import Literal, NamedTuple
 from pathlib import Path
+from typing import Literal, NamedTuple
 
+import metpy.calc as mp
 import numpy as np
 import xarray as xr
-import metpy.calc as mp
-from metpy.units import units
-from cmethods import adjust
 import xclim.indicators.convert
+from cmethods import adjust
 from geoglue.types import Bbox
+from metpy.units import units
 
 from .util import get_dart_root
 
@@ -422,10 +422,10 @@ def bias_correct_forecast(
 
         # Create masks to handle extreme values differently
         for p in PERCENTILES:
-            for var in masks:
+            for var, value in masks.items():
                 low_quantile = reanalysis[var].quantile(p.low / 100, dim="time")
                 high_quantile = reanalysis[var].quantile(p.high / 100, dim="time")
-                masks[var].append(
+                value.append(
                     (reanalysis[var] >= low_quantile)
                     & (reanalysis[var] < high_quantile)
                 )
