@@ -6,10 +6,10 @@ from .forecast import bias_correct_forecast_from_paths
 from .precipitation import bias_correct_precipitation_from_paths
 
 LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
-logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
 
 
 def main():
+    logging.basicConfig(format=LOG_FORMAT, level=logging.INFO, force=True)
     parser = argparse.ArgumentParser(
         description="""
 Bias correct either precipitation or forecast data using a

@@ -1,6 +1,7 @@
 """Bias correction module (precipitation)"""
 
 import logging
+import time
 from pathlib import Path
 
 import cmethods
@@ -137,6 +138,12 @@ def bias_correct_precipitation(
         max_precip = tp_ref.tp.quantile(clip_precip_percentile, dim="time")
         tp_ref["tp"] = tp_ref.tp.clip(0, max_precip)
 
+    logger.info(
+        "Applying quantile delta mapping to %d timesteps over %d x %d grid",
+        accum_vars.sizes["time"],
+        accum_vars.sizes["latitude"],
+        accum_vars.sizes["longitude"],
+    )
     corrected_tp = adjust_wrapper_tp(tp_ref.tp, era_tp.tp, accum_vars.tp).rename(
         {"time": "valid_time"}
     )
@@ -184,7 +191,11 @@ def bias_correct_precipitation_from_paths(
     Path
         Path where corrected dataset was written to
     """
+    start = time.perf_counter()
+    logger.info("Starting precipitation bias correction for %s", dataset_to_correct)
+    logger.info("Reading reference dataset: %s", reference_dataset)
     tp_ref = xr.open_dataset(reference_dataset)
+    logger.info("Reading uncorrected dataset: %s", uncorrected_dataset)
     era_tp = xr.open_dataset(uncorrected_dataset)
     if "time" not in tp_ref.coords:
         raise ValueError("tp_ref should have a 'time' coordinate")
@@ -203,10 +214,12 @@ def bias_correct_precipitation_from_paths(
     iso3, year = dataset_to_correct.split("-")
     year = int(year)
     data_path = get_dart_root() / "sources" / iso3 / "era5"
+    logger.info("Loading ERA5 dataset pool from %s", data_path)
     pool = ReanalysisSingleLevels(
         gadm(iso3), ["t2m", "tp"], path=data_path
     ).get_dataset_pool()
     output_file = data_path / f"{iso3}-{year}-era5.accum.tp_corrected.nc"
+    logger.info("Selecting %d from dataset pool and resampling to daily", year)
     to_corr = pool[year]
     uncorrected_tp = to_corr.accum.resample(valid_time="D").sum()
     corrected_tp = bias_correct_precipitation(
@@ -220,4 +233,5 @@ def bias_correct_precipitation_from_paths(
     )
     corrected_tp.to_netcdf(output_file)
     logger.info("Output: %s", output_file)
+    logger.info("Finished %s in %.1fs", dataset_to_correct, time.perf_counter() - start)
     return output_file

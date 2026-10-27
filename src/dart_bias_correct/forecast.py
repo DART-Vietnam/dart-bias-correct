@@ -1,6 +1,7 @@
 """Bias correction module (forecast)"""
 
 import logging
+import time
 from pathlib import Path
 from typing import Literal, NamedTuple
 
@@ -356,7 +357,10 @@ def bias_correct_forecast(
         np.array(data_hist_forecast.time)
     )  # Dtes in which the historical forecast data of the ECMWF begin
 
-    logger.info("Calculating weekly statistics for historical data")
+    logger.info(
+        "Calculating weekly statistics for historical data (%d start dates)",
+        len(dates),
+    )
     week1_mean = weekly_stats_era5(
         era5_hist, initial_time=dates, timestep=7, agg="mean"
     ).drop_vars("tp")  # measuring daily mean temperature and relative humidity
@@ -407,8 +411,9 @@ def bias_correct_forecast(
         coords=corrected_forecast.coords,
     )
 
-    for step in [7, 14]:  # 2 weeks in advance
-        logger.info("Correction at step=%d", step)
+    steps = [7, 14]  # 2 weeks in advance
+    for i, step in enumerate(steps, start=1):
+        logger.info("Correction at step=%d (%d/%d)", step, i, len(steps))
         # Use ensemble mean for correction
         forecast = data_hist_forecast.sel(step=f"{step}.days").mean(dim="number")
         weekly_raw_forecast_to_corr = weekly_raw_forecast.where(
@@ -431,7 +436,13 @@ def bias_correct_forecast(
                 )
 
         for m, percentile in enumerate(PERCENTILES):
-            logger.info("Starting correction at %r", percentile)
+            logger.info(
+                "Starting correction at %r (%d/%d) over %d ensemble members",
+                percentile,
+                m + 1,
+                len(PERCENTILES),
+                len(data_raw_forecast.number),
+            )
             for s in range(len(data_raw_forecast.number)):
                 data_to_corr_or = weekly_raw_forecast_to_corr.sel(number=s)
                 for var in masks:
@@ -569,6 +580,7 @@ def bias_correct_forecast_from_paths(
     bbox: str | Bbox | None = None,
     method: Literal["quantile_mapping", "quantile_delta_mapping"] = "quantile_mapping",
 ) -> Path:
+    start = time.perf_counter()
     if isinstance(bbox, str):
         bbox = Bbox.from_string(bbox)
     logger.info("Starting bias correct forecast using %s", method)
@@ -602,5 +614,9 @@ def bias_correct_forecast_from_paths(
     logger.info("Expected output path on successful correction: %s", output_path)
     ds = bias_correct_forecast(era5_hist, data_hist_forecast, data_raw_forecast, method)
     ds.to_netcdf(output_path)
-    logger.info("Correction complete, file saved at: %s", output_path)
+    logger.info(
+        "Correction complete in %.1fs, file saved at: %s",
+        time.perf_counter() - start,
+        output_path,
+    )
     return output_path
